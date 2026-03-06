@@ -173,7 +173,7 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-QU7DOPA4.js";
+} from "./chunk-FQ4MRL3Q.js";
 
 // src/hook.ts
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, appendFileSync, openSync, readSync, closeSync } from "fs";
@@ -1743,7 +1743,11 @@ function composeSessionNarrative(params) {
   if (params.total_turns < SESSION_NARRATIVE.MIN_TURNS_FOR_NARRATIVE) {
     return null;
   }
-  const goal = extractGoal(params);
+  const goal = extractGoal({
+    ...params,
+    cognitive_state: params.cognitive_state,
+    session_files: params.session_files
+  });
   const approach = params.cognitive_state?.current_approach ?? extractApproach(params.conversation);
   const challenges = extractChallenges(params);
   const baseLessons = extractLessons(params);
@@ -1781,6 +1785,13 @@ function composeSessionNarrative(params) {
 }
 function extractGoal(params) {
   if (params.active_task) return params.active_task;
+  if (params.cognitive_state?.current_approach) {
+    return params.cognitive_state.current_approach;
+  }
+  if (params.cognitive_state?.recent_discovery && params.session_files && params.session_files.length > 0) {
+    const topFiles = params.session_files.slice(-3).map((f) => f.split(/[/\\]/).pop() ?? f).join(", ");
+    return `${params.cognitive_state.recent_discovery} (${topFiles})`;
+  }
   if (params.conversation.topic_history.length > 0) {
     return params.conversation.topic_history[0].topic;
   }
@@ -6098,7 +6109,8 @@ ${distillLines}`
       }
       const rawCandidates = getTopDomainMemories(surfaceDomain, MEMORY_SURFACE.CANDIDATE_POOL_SIZE, excludeIds, state.active_project ?? void 0);
       const candidates = rawCandidates.filter(
-        (m) => m.confidence >= MEMORY_SURFACE.MIN_SURFACE_CONFIDENCE && m.reinforcement >= MEMORY_SURFACE.MIN_SURFACE_REINFORCEMENT && !isRecallNoise(m.content, m.type, m.tags)
+        (m) => m.confidence >= MEMORY_SURFACE.MIN_SURFACE_CONFIDENCE && m.reinforcement >= MEMORY_SURFACE.MIN_SURFACE_REINFORCEMENT && !isRecallNoise(m.content, m.type, m.tags) && !m.tags.includes("session_narrative")
+        // narratives are for model composition, not surfacing
       );
       const surfaced = selectDiverseSurface(candidates, MEMORY_SURFACE.MAX_SURFACE_ITEMS);
       if (surfaced.length > 0) {
@@ -6184,6 +6196,7 @@ ${distillLines}`
             if (somaticIds.has(m.memory.id)) continue;
             if (isRecallNoise(m.memory.content, m.memory.type, m.memory.tags)) continue;
             if (m.memory.tags.includes("pre-compact")) continue;
+            if (m.memory.tags.includes("session_narrative")) continue;
             const isFailure = m.memory.type === "episodic" && isEpisodicData(m.memory.type_data) && m.memory.type_data.outcome === "negative";
             const prefix = m.somatic_marker ? "[ENGRAM GUT]" : isFailure ? "[ENGRAM CAUTION]" : "[ENGRAM CONTEXT]";
             const outcomeHint = m.memory.type === "episodic" && (m.somatic_marker || isFailure) ? getEpisodicOutcomeHint(m.memory) : "";

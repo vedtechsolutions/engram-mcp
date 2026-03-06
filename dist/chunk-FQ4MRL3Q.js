@@ -446,16 +446,16 @@ var PROACTIVE_RECALL = {
 var MEMORY_SURFACE = {
   /** Maximum memories surfaced per prompt check */
   MAX_SURFACE_ITEMS: 3,
-  /** Candidate pool fetched from DB (filtered down to MAX_SURFACE_ITEMS) */
-  CANDIDATE_POOL_SIZE: 8,
+  /** Candidate pool fetched from DB (wider pool = more rotation diversity) */
+  CANDIDATE_POOL_SIZE: 15,
   /** Minimum turns before re-surfacing the same memory */
-  MIN_TURNS_BETWEEN_SAME: 8,
+  MIN_TURNS_BETWEEN_SAME: 12,
   /** Minimum domain string length to trigger surface injection */
   MIN_DOMAIN_LENGTH: 2,
   /** Minimum confidence for surface injection */
   MIN_SURFACE_CONFIDENCE: 0.5,
   /** Minimum reinforcement for surface injection (below default 1.0 to allow fresh memories) */
-  MIN_SURFACE_REINFORCEMENT: 0.8
+  MIN_SURFACE_REINFORCEMENT: 0.5
 };
 var RETRIEVAL_FEEDBACK = {
   /** Maximum recalled memory IDs to track (ring buffer) */
@@ -9664,9 +9664,12 @@ function removeProficiency(model, domain) {
 function computeProficiency(prof, domain) {
   let avgConfidence = 0.5;
   try {
-    const domainMemories = getMemoriesByDomain(domain, 50);
-    if (domainMemories.length > 0) {
-      avgConfidence = domainMemories.reduce((sum, m) => sum + m.confidence, 0) / domainMemories.length;
+    const domainMemories = getMemoriesByDomain(domain, 100);
+    const qualityMemories = domainMemories.filter(
+      (m) => m.type === "semantic" || m.type === "procedural" || m.type === "antipattern" || m.type === "episodic" && isEpisodicData(m.type_data) && m.type_data.lesson && m.type_data.lesson.length > 10
+    );
+    if (qualityMemories.length > 0) {
+      avgConfidence = qualityMemories.reduce((sum, m) => sum + m.confidence, 0) / qualityMemories.length;
     }
   } catch {
   }
@@ -12627,4 +12630,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-QU7DOPA4.js.map
+//# sourceMappingURL=chunk-FQ4MRL3Q.js.map
