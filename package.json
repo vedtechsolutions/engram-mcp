@@ -1,0 +1,53 @@
+{
+  "name": "engram-mcp",
+  "version": "0.2.0",
+  "description": "Cognitive memory system for AI — persistent, cross-session learning via MCP",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "engram-mcp": "dist/index.js",
+    "engram-hook": "dist/hook.js",
+    "engram-setup": "bin/setup.js"
+  },
+  "scripts": {
+    "setup": "node bin/setup.js",
+    "postinstall": "echo '\\n  Run: npx engram-setup\\n  to configure Claude Code integration.\\n'"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "ai",
+    "cognitive",
+    "engram",
+    "claude",
+    "claude-code",
+    "llm-memory",
+    "cross-session"
+  ],
+  "author": "VedTech Solutions",
+  "license": "BSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vedtechsolutions/engram-mcp.git"
+  },
+  "homepage": "https://github.com/vedtechsolutions/engram-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/vedtechsolutions/engram-mcp/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "better-sqlite3": "^11.7.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.25.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "LICENSE",
+    "README.md"
+  ]
+}
