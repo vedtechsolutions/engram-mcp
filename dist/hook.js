@@ -1793,8 +1793,18 @@ function extractGoal(params) {
     const topFiles = params.session_files.slice(-3).map((f) => f.split(/[/\\]/).pop() ?? f).join(", ");
     return `${params.cognitive_state.recent_discovery} (${topFiles})`;
   }
+  if (params.session_files && params.session_files.length > 0) {
+    const topFiles = params.session_files.slice(-5).map((f) => f.split(/[/\\]/).pop() ?? f).join(", ");
+    return `modifying ${topFiles}`;
+  }
   if (params.conversation.topic_history.length > 0) {
-    return params.conversation.topic_history[0].topic;
+    const topic = params.conversation.topic_history[0].topic;
+    const commaCount = (topic.match(/,/g) || []).length;
+    const wordCount = topic.split(/\s+/).length;
+    const isVagueKeywordList = commaCount >= 2 && wordCount <= commaCount + 2;
+    if (!isVagueKeywordList) {
+      return topic;
+    }
   }
   return null;
 }
@@ -3127,7 +3137,9 @@ function loadWatcherState() {
         offload_message_sent: raw.offload_message_sent ?? false,
         summary_injection_mode: raw.summary_injection_mode ?? false,
         recent_commands: raw.recent_commands ?? [],
-        procedural_encoded_count: raw.procedural_encoded_count ?? 0
+        procedural_encoded_count: raw.procedural_encoded_count ?? 0,
+        recent_actions: raw.recent_actions ?? [],
+        continuation_brief: raw.continuation_brief ?? null
       };
     }
   } catch {
@@ -3191,7 +3203,9 @@ function loadWatcherState() {
     offload_message_sent: false,
     summary_injection_mode: false,
     recent_commands: [],
-    procedural_encoded_count: 0
+    procedural_encoded_count: 0,
+    recent_actions: [],
+    continuation_brief: null
   };
 }
 function saveWatcherState(state) {
@@ -3627,6 +3641,14 @@ Output: ${truncate(toolOutput, 500)}`,
   state.recent_tool_names.push("Bash");
   if (state.recent_tool_names.length > 10) {
     state.recent_tool_names = state.recent_tool_names.slice(-10);
+  }
+  state.recent_actions.push({
+    tool: "Bash",
+    target: truncate(cmd, 120),
+    time: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  if (state.recent_actions.length > 15) {
+    state.recent_actions = state.recent_actions.slice(-15);
   }
   stateChanged = true;
   let testRun = null;
@@ -4111,6 +4133,14 @@ function handlePostWrite(toolInput, argFallback) {
   const filePath = input?.file_path ?? input?.path ?? "";
   if (!filePath) return;
   const state = loadWatcherState();
+  state.recent_actions.push({
+    tool: "Edit",
+    target: filePath,
+    time: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  if (state.recent_actions.length > 15) {
+    state.recent_actions = state.recent_actions.slice(-15);
+  }
   if (typeof filePath === "string" && !state.session_files.includes(filePath)) {
     state.session_files.push(filePath);
     if (state.session_files.length > 50) {
@@ -4253,6 +4283,16 @@ function handlePostToolGeneric(stdinJson) {
   state.recent_tool_names.push(toolName);
   if (state.recent_tool_names.length > 10) {
     state.recent_tool_names = state.recent_tool_names.slice(-10);
+  }
+  if (toolName !== "Read" && toolName !== "Glob" && toolName !== "Grep") {
+    state.recent_actions.push({
+      tool: toolName,
+      target: call.input_summary ?? "",
+      time: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (state.recent_actions.length > 15) {
+      state.recent_actions = state.recent_actions.slice(-15);
+    }
   }
   state.reasoning_buffer.push(call);
   if (state.reasoning_buffer.length > REASONING_TRACE.MAX_BUFFER_SIZE) {
@@ -4940,7 +4980,9 @@ function handleSessionStart(stdinJson, argFallback) {
     offload_message_sent: false,
     summary_injection_mode: false,
     recent_commands: isPostCompact ? prevState?.recent_commands ?? [] : [],
-    procedural_encoded_count: isPostCompact ? prevState?.procedural_encoded_count ?? 0 : 0
+    procedural_encoded_count: isPostCompact ? prevState?.procedural_encoded_count ?? 0 : 0,
+    recent_actions: isPostCompact ? prevState?.recent_actions ?? [] : [],
+    continuation_brief: isPostCompact ? prevState?.continuation_brief ?? null : null
   });
   const source = metadata.source;
   if (!source || source === "startup") {
@@ -5540,6 +5582,50 @@ function handleEngramUsed(stdinJson, argFallback) {
   }
   saveWatcherState(state);
 }
+function buildContinuationBrief(state) {
+  const cog = state.cognitive_state;
+  const task = state.active_task ?? cog.current_approach ?? (state.session_files.length > 0 ? `Working on ${state.session_files.slice(-3).map((f) => f.split(/[/\\]/).pop() ?? f).join(", ")}` : "unknown task");
+  const lastActions = state.recent_actions.slice(-8).map((a) => {
+    const fileName = a.target.includes("/") ? a.target.split(/[/\\]/).pop() ?? a.target : a.target;
+    return `${a.tool}: ${truncate(fileName, 80)}`;
+  });
+  const nextSteps = [];
+  if (cog.search_intent && !nextSteps.some((s) => s.includes(cog.search_intent))) {
+    nextSteps.push(`Investigate: ${cog.search_intent}`);
+  }
+  const lastAction = state.recent_actions[state.recent_actions.length - 1];
+  if (lastAction && nextSteps.length === 0) {
+    if (lastAction.tool === "Edit" || lastAction.tool === "Write") {
+      nextSteps.push("Run tests to verify changes");
+    } else if (lastAction.tool === "Bash" && lastAction.target.includes("test")) {
+      nextSteps.push("Review test results and commit if passing");
+    }
+  }
+  if (state.recent_errors.length > 0 && nextSteps.length < 3) {
+    nextSteps.push(`Fix: ${truncate(state.recent_errors[state.recent_errors.length - 1], 120)}`);
+  }
+  const decisions = [];
+  for (const id of state.decision_memory_ids.slice(-5)) {
+    try {
+      const mem = getMemory(id);
+      if (mem) decisions.push(truncate(mem.content, 150));
+    } catch {
+    }
+  }
+  const triedFailed = (state.session_outcomes ?? []).filter((o) => o.includes("\u2192 fail") || o.includes("\u2192 dead end") || o.includes("\u2192 blocked")).slice(-5).map((o) => truncate(o, 120));
+  const editActions = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write");
+  const keyFiles = [...new Set(editActions.map((a) => a.target))].slice(-10);
+  return {
+    task: truncate(task, 300),
+    phase: cog.session_phase ?? "unknown",
+    last_actions: lastActions,
+    next_steps: nextSteps.slice(0, 5),
+    decisions,
+    tried_failed: triedFailed,
+    key_files: keyFiles.length > 0 ? keyFiles : state.session_files.slice(-10),
+    blockers: state.recent_errors.slice(-3).map((e) => truncate(e, 150))
+  };
+}
 function handlePreCompact() {
   const state = loadWatcherState();
   if (!state.active_project) {
@@ -5781,6 +5867,10 @@ ${summaryParts.join(". ")}` : `Pre-compaction session summary: ${summaryParts.jo
         }
       });
       process.stdout.write(output + "\n");
+    }
+    try {
+      state.continuation_brief = buildContinuationBrief(state);
+    } catch {
     }
     state.recovery_context = recovery;
     state.understanding_snapshot = understanding;
@@ -6173,6 +6263,7 @@ ${distillLines}`
     budget.append("antipatterns", warnings);
     state.pending_error_warnings = [];
   }
+  const surfacedIds = /* @__PURE__ */ new Set();
   try {
     const surfaceDomain = state.active_domain;
     if (surfaceDomain && surfaceDomain.length >= MEMORY_SURFACE.MIN_DOMAIN_LENGTH) {
@@ -6205,6 +6296,7 @@ ${distillLines}`
           }
           state.surface_injection_turns[mem.id] = state.total_turns;
           state.proactive_injection_turns[mem.id] = state.total_turns;
+          surfacedIds.add(mem.id);
         }
         budget.append("surface", surfaceLines.join("\n"));
       }
@@ -6272,6 +6364,7 @@ ${distillLines}`
           );
           for (const m of result.memories) {
             if (somaticIds.has(m.memory.id)) continue;
+            if (surfacedIds.has(m.memory.id)) continue;
             if (isRecallNoise(m.memory.content, m.memory.type, m.memory.tags)) continue;
             if (m.memory.tags.includes("pre-compact")) continue;
             if (m.memory.tags.includes("session_narrative")) continue;
@@ -6919,38 +7012,54 @@ function handlePostCompact(stdinJson) {
     if (!recovery) return;
     const budget = new OutputBudget(OUTPUT_BUDGET.POST_COMPACT_MAX_BYTES);
     const lines = [];
-    const cog = state.cognitive_state;
-    const cogCtx = recovery.working_state?.cognitive_context;
-    const hasAnyCognitive = cog?.current_approach || cog?.active_hypothesis || cog?.recent_discovery || cogCtx?.planned_next_step || recovery.continuation_hint;
-    if (hasAnyCognitive) {
-      const mindLines = ["[Engram] Before compaction, you were:"];
-      if (state.active_task) mindLines.push(`  Task: ${truncate(state.active_task, 200)}`);
-      if (cog?.session_phase) mindLines.push(`  Phase: ${cog.session_phase}`);
-      if (cog?.current_approach) mindLines.push(`  Approach: ${truncate(cog.current_approach, 300)}`);
-      if (cog?.active_hypothesis) mindLines.push(`  Hypothesis: ${truncate(cog.active_hypothesis, 300)}`);
-      if (cog?.recent_discovery) mindLines.push(`  Discovery: ${truncate(cog.recent_discovery, 300)}`);
-      if (cogCtx?.planned_next_step) mindLines.push(`  Next step: ${truncate(cogCtx.planned_next_step, 200)}`);
-      if (cog?.search_intent) mindLines.push(`  Investigating: ${truncate(cog.search_intent, 200)}`);
-      const ruledOut = (state.session_outcomes ?? []).filter((o) => o.includes("\u2192 fail") || o.includes("\u2192 dead end") || o.includes("\u2192 blocked"));
-      if (ruledOut.length > 0) {
+    const brief = state.continuation_brief;
+    if (brief) {
+      const mindLines = ["[Engram] Continue from where you left off:"];
+      mindLines.push(`  Task: ${brief.task}`);
+      mindLines.push(`  Phase: ${brief.phase}`);
+      if (brief.last_actions.length > 0) {
+        mindLines.push(`  Last actions:`);
+        for (const a of brief.last_actions.slice(-5)) mindLines.push(`    - ${a}`);
+      }
+      if (brief.next_steps.length > 0) {
+        mindLines.push(`  Next steps:`);
+        for (const s of brief.next_steps) mindLines.push(`    - ${s}`);
+      }
+      if (brief.decisions.length > 0) {
+        mindLines.push(`  Decisions made:`);
+        for (const d of brief.decisions) mindLines.push(`    - ${d}`);
+      }
+      if (brief.tried_failed.length > 0) {
         mindLines.push(`  Already tried (didn't work):`);
-        for (const o of ruledOut.slice(-3)) mindLines.push(`    - ${truncate(o, 150)}`);
+        for (const t of brief.tried_failed) mindLines.push(`    - ${t}`);
       }
-      const blockers = recovery.working_state?.active_blockers ?? [];
-      if (blockers.length > 0) {
-        mindLines.push(`  Blockers: ${blockers.slice(0, 3).map((b) => truncate(b, 100)).join("; ")}`);
+      if (brief.blockers.length > 0) {
+        mindLines.push(`  Blockers: ${brief.blockers.join("; ")}`);
       }
-      if (state.recent_errors.length > 0) {
-        mindLines.push(`  Recent errors: ${state.recent_errors.slice(-2).map((e) => truncate(e, 100)).join("; ")}`);
-      }
-      if (state.session_files.length > 0) {
-        const files = state.session_files.slice(-8).map((f) => f.split(/[/\\]/).pop() ?? f);
+      if (brief.key_files.length > 0) {
+        const files = brief.key_files.map((f) => f.split(/[/\\]/).pop() ?? f);
         mindLines.push(`  Files: ${files.join(", ")}`);
       }
-      if (recovery.continuation_hint) {
-        mindLines.push(`  Continue: ${truncate(recovery.continuation_hint, 300)}`);
-      }
       lines.push(mindLines.join("\n"));
+    } else {
+      const cog = state.cognitive_state;
+      const cogCtx = recovery.working_state?.cognitive_context;
+      const hasAnyCognitive = cog?.current_approach || cog?.active_hypothesis || cog?.recent_discovery || cogCtx?.planned_next_step || recovery.continuation_hint;
+      if (hasAnyCognitive) {
+        const mindLines = ["[Engram] Before compaction, you were:"];
+        if (state.active_task) mindLines.push(`  Task: ${truncate(state.active_task, 200)}`);
+        if (cog?.session_phase) mindLines.push(`  Phase: ${cog.session_phase}`);
+        if (cog?.current_approach) mindLines.push(`  Approach: ${truncate(cog.current_approach, 300)}`);
+        if (cog?.active_hypothesis) mindLines.push(`  Hypothesis: ${truncate(cog.active_hypothesis, 300)}`);
+        if (cog?.recent_discovery) mindLines.push(`  Discovery: ${truncate(cog.recent_discovery, 300)}`);
+        if (cogCtx?.planned_next_step) mindLines.push(`  Next step: ${truncate(cogCtx.planned_next_step, 200)}`);
+        if (recovery.continuation_hint) mindLines.push(`  Continue: ${truncate(recovery.continuation_hint, 300)}`);
+        if (state.session_files.length > 0) {
+          const files = state.session_files.slice(-8).map((f) => f.split(/[/\\]/).pop() ?? f);
+          mindLines.push(`  Files: ${files.join(", ")}`);
+        }
+        lines.push(mindLines.join("\n"));
+      }
     }
     try {
       const transcriptPath = stdinJson?.transcript_path ?? null;
