@@ -491,6 +491,29 @@ var SCHEMA_SURFACING = {
   /** Maximum instances to sample when generating a description */
   INSTANCE_SAMPLE_COUNT: 5
 };
+var PROCEDURAL_WORKFLOW = {
+  /** Minimum successful commands in sequence to form a workflow */
+  MIN_COMMANDS: 3,
+  /** Maximum commands to track in recent_commands buffer */
+  MAX_TRACKED_COMMANDS: 20,
+  /** Maximum procedural workflows to encode per session */
+  MAX_PER_SESSION: 5,
+  /** Minimum time gap (ms) between workflow encodings to avoid bursts */
+  MIN_ENCODE_GAP_MS: 12e4,
+  /** Workflow pattern keywords — commands matching these form workflow candidates */
+  WORKFLOW_PATTERNS: {
+    build: ["build", "compile", "tsup", "tsc", "webpack", "vite", "esbuild", "rollup", "make"],
+    test: ["test", "vitest", "jest", "pytest", "mocha", "cargo test"],
+    deploy: ["deploy", "publish", "release", "push", "npm publish", "yarn publish", "pnpm publish"],
+    install: ["install", "npm install", "pnpm install", "yarn", "pip install", "cargo add"],
+    lint: ["lint", "eslint", "prettier", "black", "ruff", "clippy"],
+    db: ["migrate", "migration", "seed", "prisma", "alembic", "knex"],
+    docker: ["docker", "compose", "podman"],
+    git: ["git commit", "git push", "git tag", "git merge", "git rebase"]
+  },
+  /** Minimum confidence for encoding */
+  MIN_CONFIDENCE: 0.65
+};
 var CODE_CONTEXT_RECALL = {
   /** Maximum code identifiers to extract from content */
   MAX_CODE_KEYWORDS: 15,
@@ -12379,6 +12402,7 @@ export {
   PROACTIVE_RECALL,
   MEMORY_SURFACE,
   RETRIEVAL_FEEDBACK,
+  PROCEDURAL_WORKFLOW,
   CODE_CONTEXT_RECALL,
   DEDUP,
   SCHEMA_LIFECYCLE,
@@ -12630,4 +12654,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-FQ4MRL3Q.js.map
+//# sourceMappingURL=chunk-V5TTXT4V.js.map

@@ -28,6 +28,7 @@ import {
   PREWRITE_BLOCKING,
   PRE_COMPACTION,
   PROACTIVE_RECALL,
+  PROCEDURAL_WORKFLOW,
   REASONING_CHAIN,
   REASONING_TRACE,
   RETRIEVAL_FEEDBACK,
@@ -173,7 +174,7 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-FQ4MRL3Q.js";
+} from "./chunk-V5TTXT4V.js";
 
 // src/hook.ts
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, appendFileSync, openSync, readSync, closeSync } from "fs";
@@ -3124,7 +3125,9 @@ function loadWatcherState() {
         recall_misses: raw.recall_misses ?? 0,
         last_status_turn: raw.last_status_turn ?? 0,
         offload_message_sent: raw.offload_message_sent ?? false,
-        summary_injection_mode: raw.summary_injection_mode ?? false
+        summary_injection_mode: raw.summary_injection_mode ?? false,
+        recent_commands: raw.recent_commands ?? [],
+        procedural_encoded_count: raw.procedural_encoded_count ?? 0
       };
     }
   } catch {
@@ -3186,7 +3189,9 @@ function loadWatcherState() {
     recall_misses: 0,
     last_status_turn: 0,
     offload_message_sent: false,
-    summary_injection_mode: false
+    summary_injection_mode: false,
+    recent_commands: [],
+    procedural_encoded_count: 0
   };
 }
 function saveWatcherState(state) {
@@ -4026,6 +4031,77 @@ Output: ${truncate(toolOutput, 500)}`,
     } catch {
     }
   }
+  try {
+    const cmdLower = cmd.toLowerCase();
+    const exitCode = stdinJson?.tool_response_metadata;
+    const cmdSuccess = !isError;
+    state.recent_commands.push({ cmd: truncate(cmd, 200), success: cmdSuccess, time: (/* @__PURE__ */ new Date()).toISOString() });
+    if (state.recent_commands.length > PROCEDURAL_WORKFLOW.MAX_TRACKED_COMMANDS) {
+      state.recent_commands = state.recent_commands.slice(-PROCEDURAL_WORKFLOW.MAX_TRACKED_COMMANDS);
+    }
+    stateChanged = true;
+    if (cmdSuccess && state.procedural_encoded_count < PROCEDURAL_WORKFLOW.MAX_PER_SESSION) {
+      const successCmds = state.recent_commands.filter((c) => c.success);
+      if (successCmds.length >= PROCEDURAL_WORKFLOW.MIN_COMMANDS) {
+        for (const [workflowName, keywords] of Object.entries(PROCEDURAL_WORKFLOW.WORKFLOW_PATTERNS)) {
+          const matching = successCmds.filter((c) => {
+            const cl = c.cmd.toLowerCase();
+            return keywords.some((kw) => cl.includes(kw));
+          });
+          if (matching.length >= PROCEDURAL_WORKFLOW.MIN_COMMANDS) {
+            const steps = matching.slice(-6).map((c, i) => `${i + 1}. ${truncate(c.cmd, 120)}`).join("\n");
+            const content = `${workflowName} workflow (${matching.length} steps):
+${steps}`;
+            const domains = state.active_domain ? [state.active_domain] : [];
+            const existing = findDuplicate(content, "procedural", domains);
+            if (!existing) {
+              createMemory({
+                type: "procedural",
+                content,
+                summary: `${workflowName} workflow: ${matching.slice(-3).map((c) => truncate(c.cmd, 40)).join(" \u2192 ")}`,
+                encoding_strength: 0.7,
+                reinforcement: 1.2,
+                confidence: PROCEDURAL_WORKFLOW.MIN_CONFIDENCE,
+                storage_tier: "short_term",
+                pinned: false,
+                tags: ["workflow", `workflow-${workflowName}`, "auto-encoded"],
+                domains,
+                version: state.active_version,
+                encoding_context: {
+                  project: state.active_project,
+                  project_path: state.active_project_path,
+                  framework: state.active_domain,
+                  version: state.active_version,
+                  files: state.session_files.slice(-5),
+                  task_type: workflowName === "build" ? "building" : null,
+                  error_context: null,
+                  session_id: sessionId,
+                  significance_score: 0.7
+                },
+                type_data: {
+                  kind: "procedural",
+                  steps: matching.map((c) => c.cmd),
+                  preconditions: [],
+                  postconditions: [],
+                  practice_count: 1,
+                  automaticity: 0.3,
+                  variants: [],
+                  skill_metadata: null
+                }
+              });
+              state.procedural_encoded_count++;
+              stateChanged = true;
+              log.info("Auto-encoded procedural workflow", { type: workflowName, steps: matching.length });
+              const matchedTimes = new Set(matching.map((c) => c.time));
+              state.recent_commands = state.recent_commands.filter((c) => !matchedTimes.has(c.time));
+            }
+            break;
+          }
+        }
+      }
+    }
+  } catch {
+  }
   if (stateChanged) {
     saveWatcherState(state);
   }
@@ -4862,7 +4938,9 @@ function handleSessionStart(stdinJson, argFallback) {
     recall_misses: isPostCompact ? prevState?.recall_misses ?? 0 : 0,
     last_status_turn: 0,
     offload_message_sent: false,
-    summary_injection_mode: false
+    summary_injection_mode: false,
+    recent_commands: isPostCompact ? prevState?.recent_commands ?? [] : [],
+    procedural_encoded_count: isPostCompact ? prevState?.procedural_encoded_count ?? 0 : 0
   });
   const source = metadata.source;
   if (!source || source === "startup") {
