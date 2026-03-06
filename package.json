@@ -1,6 +1,6 @@
 {
   "name": "engram-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Cognitive memory system for AI — persistent, cross-session learning via MCP",
   "type": "module",
   "main": "dist/index.js",

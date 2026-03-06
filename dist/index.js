@@ -120,6 +120,7 @@ import {
   logConsolidation,
   now,
   optimizeFts,
+  porterStem,
   preWarmActivation,
   pruneArchitectureGraph,
   pruneConsolidationLog,
@@ -153,7 +154,7 @@ import {
   vaccinate,
   vacuumDatabase,
   validateMultiPerspective
-} from "./chunk-IBN6XTSK.js";
+} from "./chunk-AC6AZCP4.js";
 
 // src/index.ts
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -1042,7 +1043,7 @@ function detectPatterns(memories, config2, result) {
       const instanceIds = cluster.map((m) => m.id);
       const allExisting = instanceIds.every((id) => existingInstanceSets.has(id));
       if (allExisting) continue;
-      const allKeywords = cluster.map((m) => extractKeywords(m.content));
+      const allKeywords = cluster.map((m) => extractKeywords(m.content).map(porterStem));
       const commonKeywords = findCommonKeywords(allKeywords);
       const schemaName = commonKeywords.length > 0 ? `${domain}:${commonKeywords.slice(0, 3).join("_")}` : `${domain}:pattern_${generateId().substring(0, 8)}`;
       const domainsSeen = /* @__PURE__ */ new Set();
@@ -1543,7 +1544,13 @@ function classifyNoise(mem) {
   const lesson = typeData && "lesson" in typeData ? typeData.lesson : void 0;
   const hasRealLesson = lesson != null && lesson.length > 0 && !lesson.startsWith("Investigation across") && !lesson.startsWith("Narrowed search:") && !lesson.startsWith("Changed direction:") && !lesson.startsWith("File ") && !(lesson.startsWith("Error '") && /resolved\./.test(lesson));
   if (mem.pinned || mem.confidence >= 0.8) return null;
-  if (mem.type === "antipattern" || mem.type === "semantic" || mem.type === "procedural") return null;
+  if (mem.type === "antipattern" || mem.type === "procedural") return null;
+  if (mem.type === "semantic") {
+    if (content.startsWith("User intent:") || content.startsWith("User instruction:")) return "user_intent_noise";
+    if (content.startsWith("Session progress:")) return "session_progress_noise";
+    if (content.startsWith("Reasoning insight:")) return "session_progress_noise";
+    return null;
+  }
   if (tags.includes("subagent")) {
     if (hasLesson || hasRealLesson) return null;
     const first200 = content.substring(0, 200);
@@ -1605,7 +1612,7 @@ function runCleanup(dryRun = true) {
   };
   const rows = db.prepare(`
     SELECT * FROM memories
-    WHERE type = 'episodic'
+    WHERE type IN ('episodic', 'semantic')
       AND pinned = 0
       AND flagged_for_pruning = 0
     ORDER BY created_at ASC
@@ -2718,7 +2725,7 @@ function handleVaccinate(args, config2, sessionId2) {
   });
 }
 function handleCleanup(args) {
-  const dryRun = args.dry_run !== false;
+  const dryRun = args.dry_run ?? true;
   const result = runCleanup(dryRun);
   const totalNoise = Object.values(result.categories).reduce((a, b) => a + b, 0);
   return jsonResult({

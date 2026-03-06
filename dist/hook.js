@@ -155,6 +155,7 @@ import {
   resetAttention,
   resetAutonomicState,
   retrievalReinforcement,
+  safeErrorStr,
   scanProject,
   searchMemories,
   selectDiverseSurface,
@@ -171,7 +172,7 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-IBN6XTSK.js";
+} from "./chunk-AC6AZCP4.js";
 
 // src/hook.ts
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, appendFileSync, openSync, readSync, closeSync } from "fs";
@@ -3259,7 +3260,7 @@ function writeSessionHandoff(state, narrative) {
     renameSync(tmpPath, handoffPath);
     log.info("Session handoff written", { path: handoffPath });
   } catch (e) {
-    log.error("Failed to write session handoff", { error: String(e) });
+    log.error("Failed to write session handoff", { error: safeErrorStr(e) });
   }
 }
 function readSessionHandoff(currentProject) {
@@ -3388,7 +3389,7 @@ async function main() {
     const projectDbPath = deriveProjectDbPath(projectRoot);
     initProjectDatabase(projectDbPath);
   } catch (e) {
-    log.error("Failed to attach project database", { error: String(e) });
+    log.error("Failed to attach project database", { error: safeErrorStr(e) });
   }
   switch (command) {
     case "pre-write":
@@ -3554,7 +3555,7 @@ function handlePreWrite(toolInput, argFallback) {
           contextLines.push(`[ENGRAM HOW-TO] ${truncate(p.memory.content, 200)}`);
         }
       } catch (e) {
-        log.error("Code context recall failed", { error: String(e) });
+        log.error("Code context recall failed", { error: safeErrorStr(e) });
       }
     }
     if (contextLines.length > 0) {
@@ -3571,7 +3572,7 @@ function handlePreWrite(toolInput, argFallback) {
       process.stdout.write(JSON.stringify(output) + "\n");
     }
   } catch (e) {
-    log.error("handlePreWrite failed", { error: String(e) });
+    log.error("handlePreWrite failed", { error: safeErrorStr(e) });
   }
 }
 function handlePostBash(stdinJson, argInput, argOutput) {
@@ -3793,10 +3794,20 @@ Output: ${truncate(toolOutput, 500)}`,
       }
       recordError(toolOutput, cmd, filePath, process.cwd());
       addBlockerToTask(process.cwd(), errorSummary);
+      if (state.active_domain) {
+        try {
+          recordDomainOutcome(state.active_domain, "negative");
+        } catch {
+        }
+        try {
+          recordDomainMasteryOutcome(state.active_domain, "negative", "bash_error");
+        } catch {
+        }
+      }
       if (!extracted || !findErrorByFingerprint(extracted.fingerprint)?.occurrences) {
         try {
           const errorSnippet = errorSummary.substring(0, 200);
-          const pastNegatives = searchMemories(errorSnippet, 5).filter((m) => m.type === "episodic" && isEpisodicData(m.type_data) && m.type_data.outcome === "negative");
+          const pastNegatives = searchMemories(errorSnippet, 5).filter((m) => !isRecallNoise(m.content, m.type, m.tags)).filter((m) => m.type === "episodic" && isEpisodicData(m.type_data) && m.type_data.outcome === "negative");
           if (pastNegatives.length > 0) {
             const best = pastNegatives[0];
             const resolution = findResolutionForError(best.id);
@@ -4574,7 +4585,7 @@ function handleNotification(type, data) {
       try {
         proactiveOffload();
       } catch (e) {
-        log.error("Proactive offload failed", { error: String(e) });
+        log.error("Proactive offload failed", { error: safeErrorStr(e) });
       }
     }
     const eventType = type === "error" ? "error" : type === "correction" ? "correction" : "notification";
@@ -4592,7 +4603,7 @@ function handleNotification(type, data) {
       }
     }
   } catch (e) {
-    log.error("handleNotification failed", { error: String(e) });
+    log.error("handleNotification failed", { error: safeErrorStr(e) });
   }
 }
 function proactiveOffload() {
@@ -5161,7 +5172,7 @@ function handleStopWatch() {
       state.milestone_encoded_count++;
       log.info("Milestone auto-encode", { turn: state.total_turns });
     } catch (e) {
-      log.error("Milestone auto-encode failed", { error: String(e) });
+      log.error("Milestone auto-encode failed", { error: safeErrorStr(e) });
     }
   }
   saveWatcherState(state);
@@ -5355,7 +5366,7 @@ function handleSubagentStop(stdinJson) {
     }
     log.info("SubagentStop recorded", { agent_type: agentType, has_error: hasError, has_lesson: hasLesson, has_cognition: hasCognitiveValue });
   } catch (e) {
-    log.error("SubagentStop encode failed", { error: String(e) });
+    log.error("SubagentStop encode failed", { error: safeErrorStr(e) });
   }
 }
 function handleEngramUsed(stdinJson, argFallback) {
@@ -5679,7 +5690,7 @@ ${summaryParts.join(". ")}` : `Pre-compaction session summary: ${summaryParts.jo
     } catch {
     }
   } catch (e) {
-    log.error("Failed to save pre-compact summary", { error: String(e) });
+    log.error("Failed to save pre-compact summary", { error: safeErrorStr(e) });
   }
 }
 function handlePromptCheck(stdinJson, argFallback) {
@@ -5985,7 +5996,7 @@ ${distillLines}`
       }
     }
   } catch (e) {
-    log.error("Feedback detection failed", { error: String(e) });
+    log.error("Feedback detection failed", { error: safeErrorStr(e) });
   }
   let teachingContext = null;
   try {
@@ -5995,7 +6006,7 @@ ${distillLines}`
       teachingContext = assembleTeachingContext(teachingSignal, state.active_domain);
     }
   } catch (e) {
-    log.error("Teaching detection failed", { error: String(e) });
+    log.error("Teaching detection failed", { error: safeErrorStr(e) });
   }
   const task = extractTask(content);
   const versionHint = extractVersion(content);
@@ -6029,7 +6040,7 @@ ${distillLines}`
   try {
     updateConversationState(state.conversation, content);
   } catch (e) {
-    log.error("Conversation tracking failed", { error: String(e) });
+    log.error("Conversation tracking failed", { error: safeErrorStr(e) });
   }
   try {
     const MAX_TRACKED_MESSAGES = 200;
@@ -6038,53 +6049,6 @@ ${distillLines}`
       state.message_has_code.push(containsCode(content) ? 1 : 0);
       state.message_jargon_count.push(countJargon(content));
       state.message_is_question.push(isQuestion(content) ? 1 : 0);
-    }
-  } catch {
-  }
-  try {
-    const isSubstantive = content.length > 100 && !content.match(/^(yes|no|ok|continue|proceed|done|thanks|commit|push|build|test|run)\b/i) && state.feedback_encoded_count + state.discovery_encoded_count < 40;
-    if (isSubstantive && canEncodeFeedback(state)) {
-      const firstSentence = content.split(/[.!?\n]/)[0]?.trim() ?? "";
-      if (firstSentence.length > 20) {
-        const intentContent = `User intent: ${truncate(firstSentence, 200)}`;
-        const domains = state.active_domain ? [state.active_domain] : [];
-        const existing = findDuplicate(intentContent, "semantic", domains);
-        if (!existing) {
-          createMemory({
-            type: "semantic",
-            content: intentContent,
-            summary: null,
-            encoding_strength: 0.5,
-            reinforcement: 1,
-            confidence: 0.5,
-            domains,
-            version: state.active_version,
-            tags: ["user-intent", "auto_encoded"],
-            storage_tier: "short_term",
-            pinned: false,
-            encoding_context: {
-              framework: state.active_domain,
-              version: state.active_version,
-              project: state.active_project,
-              project_path: state.active_project_path,
-              task_type: null,
-              files: [],
-              error_context: null,
-              session_id: state.session_start,
-              significance_score: 0.4
-            },
-            type_data: {
-              kind: "semantic",
-              knowledge_type: "convention",
-              source: "user_instruction",
-              source_episodes: [],
-              applicable_versions: null,
-              deprecated_in: null
-            }
-          });
-          log.info("User intent encoded", { length: firstSentence.length });
-        }
-      }
     }
   } catch {
   }
@@ -6316,7 +6280,7 @@ ${distillLines}`
             outputLines.push(formatDecisionInjection(sd));
           }
         } catch (e) {
-          log.error("Decision surfacing failed", { error: String(e) });
+          log.error("Decision surfacing failed", { error: safeErrorStr(e) });
         }
       }
       if ((level === "high" || level === "medium") && state.total_turns - state.last_chain_injection_turn >= 5) {
@@ -6332,7 +6296,7 @@ ${distillLines}`
             state.last_chain_injection_turn = state.total_turns;
           }
         } catch (e) {
-          log.error("Chain surfacing failed", { error: String(e) });
+          log.error("Chain surfacing failed", { error: safeErrorStr(e) });
         }
       }
       if (level !== "high" && result.memories.length > 0) {
@@ -6354,7 +6318,7 @@ ${distillLines}`
           if (contextOutputIds.has(mem.id)) continue;
           if (isRecallNoise(mem.content, mem.type, mem.tags)) continue;
           if (mem.tags.includes("pre-compact")) continue;
-          if (mem.type === "episodic" && state.active_project && mem.encoding_context?.project && mem.encoding_context.project !== state.active_project) continue;
+          if (state.active_project && mem.encoding_context?.project && mem.encoding_context.project !== state.active_project && (mem.type === "episodic" || mem.type === "semantic" && mem.domains.length > 0)) continue;
           const lastTurn = state.proactive_injection_turns[mem.id];
           if (lastTurn !== void 0 && state.total_turns - lastTurn < PROACTIVE_RECALL.MIN_TURNS_BETWEEN_SAME) continue;
           const domainMatch = !state.active_domain || mem.domains.includes(state.active_domain);
@@ -6535,7 +6499,7 @@ function handleSessionEnd() {
         }
       }
     } catch (e) {
-      log.error("Hebbian strengthening failed", { error: String(e) });
+      log.error("Hebbian strengthening failed", { error: safeErrorStr(e) });
     }
     let narrativeText = null;
     let sessionNarrative = null;
@@ -6627,7 +6591,7 @@ function handleSessionEnd() {
           emotional_weight: narrative?.emotional_weight
         });
       } catch (e) {
-        log.error("Failed to auto-encode session narrative", { error: String(e) });
+        log.error("Failed to auto-encode session narrative", { error: safeErrorStr(e) });
       }
     }
     try {
@@ -6660,7 +6624,7 @@ function handleSessionEnd() {
       }
       updateSelfModelFromSession(sessionUpdate);
     } catch (e) {
-      log.error("Failed to update self-model", { error: String(e) });
+      log.error("Failed to update self-model", { error: safeErrorStr(e) });
     }
     if (state.active_domain && state.total_turns >= 3) {
       try {
@@ -6684,7 +6648,7 @@ function handleSessionEnd() {
         });
       }
     } catch (e) {
-      log.error("Failed to update decision outcomes", { error: String(e) });
+      log.error("Failed to update decision outcomes", { error: safeErrorStr(e) });
     }
     try {
       if (state.active_chain_ids.length > 0) {
@@ -6700,7 +6664,7 @@ function handleSessionEnd() {
       }
       timeoutStaleChains();
     } catch (e) {
-      log.error("Failed to clean up reasoning chains", { error: String(e) });
+      log.error("Failed to clean up reasoning chains", { error: safeErrorStr(e) });
     }
     if (state.active_domain) {
       try {
@@ -6742,7 +6706,7 @@ function handleSessionEnd() {
         });
       }
     } catch (e) {
-      log.error("Retrieval feedback failed", { error: String(e) });
+      log.error("Retrieval feedback failed", { error: safeErrorStr(e) });
     }
     try {
       const cog = state.cognitive_state;
@@ -6807,14 +6771,14 @@ function handleSessionEnd() {
     try {
       writeSessionHandoff(state, sessionNarrative);
     } catch (e) {
-      log.error("Session handoff write failed", { error: String(e) });
+      log.error("Session handoff write failed", { error: safeErrorStr(e) });
     }
     state.active_chain_ids = [];
     saveWatcherState(state);
     deleteSessionState();
     log.info("Session end processed", { session: sessionId });
   } catch (e) {
-    log.error("handleSessionEnd failed", { error: String(e) });
+    log.error("handleSessionEnd failed", { error: safeErrorStr(e) });
   }
 }
 function handlePreBash(stdinJson) {
@@ -6843,7 +6807,7 @@ function handlePreBash(stdinJson) {
     };
     process.stdout.write(JSON.stringify(output) + "\n");
   } catch (e) {
-    log.error("handlePreBash failed", { error: String(e) });
+    log.error("handlePreBash failed", { error: safeErrorStr(e) });
   }
 }
 function handlePostCompact(stdinJson) {
@@ -6961,7 +6925,7 @@ ${recallLines.join("\n")}`);
     state.understanding_snapshot = null;
     saveWatcherState(state);
   } catch (e) {
-    log.error("Post-compact handler failed", { error: String(e) });
+    log.error("Post-compact handler failed", { error: safeErrorStr(e) });
   }
 }
 function extractTask(prompt) {

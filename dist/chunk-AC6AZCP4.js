@@ -52,7 +52,7 @@ var CONSOLIDATION = {
   /** Schema formation: connection strength between cluster members */
   SCHEMA_CONNECTION_STRENGTH: 0.6,
   /** Common keyword threshold (fraction of cluster that must share keyword) */
-  COMMON_KEYWORD_THRESHOLD: 0.4,
+  COMMON_KEYWORD_THRESHOLD: 0.3,
   // --- Embedding-based connection densification (Step 1) ---
   /** Minimum cosine similarity to create an embedding-based connection */
   EMBEDDING_CONNECTION_THRESHOLD: 0.45,
@@ -1705,8 +1705,8 @@ var CONTEXTUAL = {
   VERSION_BOOST: 0.3,
   /** Penalty multiplier for version mismatch (0.4 = 60% reduction) */
   VERSION_MISMATCH_PENALTY: 0.4,
-  /** Penalty multiplier for domain mismatch (0.7 = 30% reduction, less harsh than version) */
-  DOMAIN_MISMATCH_PENALTY: 0.7,
+  /** Penalty multiplier for domain mismatch (0.5 = 50% reduction) */
+  DOMAIN_MISMATCH_PENALTY: 0.5,
   /** Penalty multiplier for project mismatch on episodic memories (0.3 = 70% reduction) */
   PROJECT_MISMATCH_PENALTY: 0.3,
   /** Boost for failure experiences with lessons (surfaces "I tried this and it didn't work") */
@@ -2268,9 +2268,34 @@ function deriveProjectDbPath(projectPath) {
 
 // src/storage/database.ts
 import Database from "better-sqlite3";
-import { existsSync as existsSync2, mkdirSync as mkdirSync2, statSync, readdirSync } from "fs";
-import { dirname as dirname2, join as join2 } from "path";
+import { existsSync as existsSync2, mkdirSync as mkdirSync2, statSync, readdirSync, lstatSync } from "fs";
+import { dirname as dirname2, join as join2, resolve as resolve2 } from "path";
 import { homedir as homedir2 } from "os";
+function validateDbPathForAttach(dbPath) {
+  const resolved = resolve2(dbPath);
+  if (!resolved.endsWith(".db")) throw new Error(`ATTACH rejected: path must end with .db: ${resolved}`);
+  if (existsSync2(resolved)) {
+    try {
+      const stat = lstatSync(resolved);
+      if (stat.isSymbolicLink()) throw new Error(`ATTACH rejected: symlink not allowed: ${resolved}`);
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("ATTACH rejected")) throw e;
+    }
+  }
+  const engramRoot = join2(homedir2(), ".engram");
+  const inEngram = resolved.startsWith(engramRoot + "/") || resolved === join2(engramRoot, "engram.db");
+  const inTmp = resolved.startsWith("/tmp/");
+  if (!inEngram && !inTmp) {
+    throw new Error(`ATTACH rejected: path outside allowed directories: ${resolved}`);
+  }
+  return resolved;
+}
+function validateAlias(alias) {
+  if (!/^[a-zA-Z][a-zA-Z0-9_]{0,62}$/.test(alias)) {
+    throw new Error(`ATTACH rejected: invalid alias: ${alias}`);
+  }
+  return alias;
+}
 var SCHEMA_SQL = `
 -- Core memories table
 CREATE TABLE IF NOT EXISTS memories (
@@ -2983,9 +3008,10 @@ function initProjectDatabase(projectDbPath) {
   if (_projectDbAttached) {
     detachProjectDb();
   }
-  mainDb.exec(`ATTACH DATABASE '${projectDbPath.replace(/'/g, "''")}' AS project`);
+  const safePath = validateDbPathForAttach(projectDbPath);
+  mainDb.exec(`ATTACH DATABASE '${safePath.replace(/'/g, "''")}' AS project`);
   _projectDbAttached = true;
-  _projectDbPath = projectDbPath;
+  _projectDbPath = safePath;
 }
 function detachProjectDb() {
   if (!_projectDbAttached) return;
@@ -3005,12 +3031,15 @@ function getProjectDbPath() {
 }
 function attachTemporary(dbPath, alias) {
   const db = getDatabase();
-  db.exec(`ATTACH DATABASE '${dbPath.replace(/'/g, "''")}' AS "${alias}"`);
+  const safePath = validateDbPathForAttach(dbPath);
+  const safeAlias = validateAlias(alias);
+  db.exec(`ATTACH DATABASE '${safePath.replace(/'/g, "''")}' AS "${safeAlias}"`);
 }
 function detachTemporary(alias) {
   try {
+    const safeAlias = validateAlias(alias);
     const db = getDatabase();
-    db.exec(`DETACH DATABASE "${alias}"`);
+    db.exec(`DETACH DATABASE "${safeAlias}"`);
   } catch {
   }
 }
@@ -3064,6 +3093,10 @@ function getProjectDatabaseInfo(dbPaths) {
 import { v4 as uuidv4 } from "uuid";
 function generateId() {
   return uuidv4();
+}
+function safeErrorStr(e, maxLen = 200) {
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg.length > maxLen ? msg.slice(0, maxLen) + "..." : msg;
 }
 function now() {
   return (/* @__PURE__ */ new Date()).toISOString();
@@ -8027,6 +8060,10 @@ function evictLowestPriority() {
 // src/engines/retrieval.ts
 var logger8 = createLogger("retrieval");
 function isRecallNoise(content, type, tags) {
+  if (content.startsWith("User intent:")) return true;
+  if (content.startsWith("User instruction:")) return true;
+  if (content.startsWith("Session progress:")) return true;
+  if (content.startsWith("Reasoning insight:")) return true;
   if (type !== "episodic") return false;
   if (content.startsWith("Investigated:")) return true;
   if (content.startsWith("Refined hypothesis")) return true;
@@ -9560,7 +9597,7 @@ function recordDomainOutcome(domain, outcome) {
   if (!prof) {
     prof = {
       domain,
-      proficiency: 0.5,
+      proficiency: 0.3,
       task_count: 0,
       success_count: 0,
       failure_count: 0,
@@ -11067,7 +11104,7 @@ function inferRole(nodeType, filePath, analysis) {
 }
 
 // src/engines/curator.ts
-import { existsSync as existsSync5, readFileSync as readFileSync4, writeFileSync, realpathSync, lstatSync, renameSync } from "fs";
+import { existsSync as existsSync5, readFileSync as readFileSync4, writeFileSync, realpathSync as realpathSync2, lstatSync as lstatSync2, renameSync } from "fs";
 import { join as join5, dirname as dirname3 } from "path";
 import { homedir as homedir3 } from "os";
 var logger14 = createLogger("curator");
@@ -11337,9 +11374,9 @@ function writeContextBridge(memoryDir, content) {
     return false;
   }
   try {
-    const realDir = realpathSync(memoryDir);
+    const realDir = realpathSync2(memoryDir);
     if (existsSync5(join5(realDir, CURATOR.BRIDGE_FILENAME))) {
-      const stat = lstatSync(join5(realDir, CURATOR.BRIDGE_FILENAME));
+      const stat = lstatSync2(join5(realDir, CURATOR.BRIDGE_FILENAME));
       if (stat.isSymbolicLink()) {
         logger14.warn("Bridge file is a symlink \u2014 refusing to write");
         return false;
@@ -11463,7 +11500,7 @@ function updateMemoryMdMentalModels(memoryDir, models) {
   const memoryMdPath = join5(memoryDir, "MEMORY.md");
   if (!existsSync5(memoryMdPath)) return false;
   try {
-    const stat = lstatSync(memoryMdPath);
+    const stat = lstatSync2(memoryMdPath);
     if (stat.isSymbolicLink()) {
       logger14.warn("MEMORY.md is a symlink \u2014 refusing to write");
       return false;
@@ -12361,6 +12398,7 @@ export {
   listProjectDatabases,
   getProjectDatabaseInfo,
   generateId,
+  safeErrorStr,
   now,
   daysElapsed,
   estimateTokens,
@@ -12488,6 +12526,7 @@ export {
   formatZPDInjection,
   recordProgressionOutcome,
   recordDomainMasteryOutcome,
+  porterStem,
   refreshIdfCache,
   generateEmbedding,
   cosineSimilarity,
@@ -12558,4 +12597,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-IBN6XTSK.js.map
+//# sourceMappingURL=chunk-AC6AZCP4.js.map
