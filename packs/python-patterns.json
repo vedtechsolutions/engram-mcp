@@ -1,0 +1,106 @@
+{
+  "name": "Python Common Patterns",
+  "version": "1.0.0",
+  "description": "Common Python antipatterns and best practices",
+  "memories": [
+    {
+      "type": "antipattern",
+      "content": "Never use mutable default arguments: def foo(items=[]). The list is shared across all calls. Use def foo(items=None): items = items or [] instead.",
+      "domains": ["python"],
+      "severity": "high",
+      "tags": ["gotchas"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use bare except: clauses. Always catch specific exceptions: except ValueError or at minimum except Exception. Bare except catches SystemExit and KeyboardInterrupt.",
+      "domains": ["python"],
+      "severity": "high",
+      "tags": ["error-handling"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use 'is' to compare values. 'is' checks identity (same object), not equality. Use == for value comparison. Exception: 'is None' is correct and preferred.",
+      "domains": ["python"],
+      "severity": "medium",
+      "tags": ["gotchas"]
+    },
+    {
+      "type": "semantic",
+      "content": "Use pathlib.Path instead of os.path for path manipulation. Path objects support / operator, are more readable, and handle cross-platform differences: Path('src') / 'main.py'.",
+      "domains": ["python"],
+      "tags": ["stdlib"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't modify a list while iterating over it. Use a list comprehension to filter: items = [x for x in items if x.valid] or iterate over a copy: for x in items[:].",
+      "domains": ["python"],
+      "severity": "high",
+      "tags": ["gotchas"]
+    },
+    {
+      "type": "semantic",
+      "content": "Use f-strings for string formatting (Python 3.6+): f'{name} is {age}' — faster than .format() and more readable than % formatting.",
+      "domains": ["python"],
+      "tags": ["style"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use 'type(x) == int' for type checking. Use isinstance(x, int) — it handles subclasses correctly and supports tuple of types: isinstance(x, (int, float)).",
+      "domains": ["python"],
+      "severity": "medium",
+      "tags": ["type-checking"]
+    },
+    {
+      "type": "semantic",
+      "content": "Use context managers (with statement) for resource management: files, database connections, locks. They guarantee cleanup even on exceptions: with open('f') as fh:",
+      "domains": ["python"],
+      "tags": ["patterns"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use wildcard imports: from module import *. It pollutes the namespace, makes code harder to read, and can cause subtle name collisions. Import explicitly.",
+      "domains": ["python"],
+      "severity": "medium",
+      "tags": ["imports"]
+    },
+    {
+      "type": "semantic",
+      "content": "Use dataclasses for simple data containers (Python 3.7+): @dataclass with type annotations. For immutable data, use @dataclass(frozen=True). Prefer over plain dicts or namedtuples.",
+      "domains": ["python"],
+      "tags": ["patterns"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use global variables for shared state. Use function parameters, class attributes, or dependency injection. Globals make testing hard and introduce hidden coupling.",
+      "domains": ["python"],
+      "severity": "medium",
+      "tags": ["architecture"]
+    },
+    {
+      "type": "semantic",
+      "content": "Use enumerate() instead of manual index tracking: for i, item in enumerate(items) — not for i in range(len(items)). Cleaner and less error-prone.",
+      "domains": ["python"],
+      "tags": ["style"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't concatenate strings in loops with +=. Use ''.join(parts) — string concatenation creates a new string each time (O(n^2)), while join is O(n).",
+      "domains": ["python"],
+      "severity": "medium",
+      "tags": ["performance"]
+    },
+    {
+      "type": "semantic",
+      "content": "Use typing module for type hints: def greet(name: str) -> str. For complex types: list[str], dict[str, int], Optional[str], Union[int, str]. Enables IDE support and static analysis.",
+      "domains": ["python"],
+      "tags": ["type-checking"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't silence exceptions with pass: except SomeError: pass. At minimum log the error. Silent failures hide bugs and make debugging extremely difficult.",
+      "domains": ["python"],
+      "severity": "high",
+      "tags": ["error-handling"]
+    }
+  ]
+}

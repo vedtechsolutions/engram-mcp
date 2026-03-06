@@ -1,6 +1,6 @@
 {
   "name": "@vedtechsolutions/engram-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Cognitive memory system for AI — persistent, cross-session learning via MCP",
   "type": "module",
   "main": "dist/index.js",
@@ -8,7 +8,8 @@
   "bin": {
     "engram-mcp": "dist/index.js",
     "engram-hook": "dist/hook.js",
-    "engram-setup": "bin/setup.js"
+    "engram-setup": "bin/setup.js",
+    "engram-import-pack": "bin/import-pack.js"
   },
   "scripts": {
     "setup": "node bin/setup.js",
@@ -47,6 +48,7 @@
   "files": [
     "dist/",
     "bin/",
+    "packs/",
     "LICENSE",
     "README.md"
   ]

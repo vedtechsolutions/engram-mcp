@@ -1,0 +1,106 @@
+{
+  "name": "Claude Code Best Practices",
+  "version": "1.0.0",
+  "description": "Common patterns and antipatterns for effective Claude Code usage",
+  "memories": [
+    {
+      "type": "antipattern",
+      "content": "Don't use sed/awk for file edits in Claude Code. Use the Edit tool — it shows diffs, preserves formatting, and the user can review changes before applying.",
+      "domains": ["claude-code"],
+      "severity": "high",
+      "tags": ["tool-usage"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use find/ls to search for files. Use the Glob tool — it's faster, handles permissions correctly, and returns structured results.",
+      "domains": ["claude-code"],
+      "severity": "high",
+      "tags": ["tool-usage"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use grep/rg via Bash. Use the Grep tool — it has optimized permissions, supports ripgrep syntax, and provides output modes (content, files, count).",
+      "domains": ["claude-code"],
+      "severity": "high",
+      "tags": ["tool-usage"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use cat/head/tail to read files. Use the Read tool — it shows line numbers, supports offset/limit for large files, and can read images and PDFs.",
+      "domains": ["claude-code"],
+      "severity": "medium",
+      "tags": ["tool-usage"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't commit unless explicitly asked. Creating unauthorized commits can lose work or include unintended changes. Always confirm with the user first.",
+      "domains": ["claude-code", "git"],
+      "severity": "high",
+      "tags": ["git", "workflow"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't use git push --force or git reset --hard without explicit user permission. These are destructive operations that can lose work.",
+      "domains": ["claude-code", "git"],
+      "severity": "critical",
+      "tags": ["git", "destructive"]
+    },
+    {
+      "type": "semantic",
+      "content": "Read a file before editing it. The Edit tool requires the file to have been read first in the conversation. Always Read before Edit.",
+      "domains": ["claude-code"],
+      "tags": ["tool-usage"]
+    },
+    {
+      "type": "semantic",
+      "content": "Use the Agent tool for broad codebase exploration and deep research. Use Glob/Grep directly for simple, directed searches (specific file/class/function).",
+      "domains": ["claude-code"],
+      "tags": ["tool-usage"]
+    },
+    {
+      "type": "semantic",
+      "content": "Make independent tool calls in parallel. If multiple reads or searches don't depend on each other, call them all in the same response for efficiency.",
+      "domains": ["claude-code"],
+      "tags": ["performance"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't over-engineer. Only make changes directly requested or clearly necessary. A bug fix doesn't need surrounding code cleaned up. Don't add docstrings, comments, or type annotations to code you didn't change.",
+      "domains": ["claude-code"],
+      "severity": "medium",
+      "tags": ["workflow"]
+    },
+    {
+      "type": "semantic",
+      "content": "When editing, the old_string must be unique in the file. If it's not unique, include more surrounding context to make it unique, or use replace_all for global renames.",
+      "domains": ["claude-code"],
+      "tags": ["tool-usage"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't skip git hooks with --no-verify. If a pre-commit hook fails, investigate and fix the underlying issue rather than bypassing it.",
+      "domains": ["claude-code", "git"],
+      "severity": "high",
+      "tags": ["git"]
+    },
+    {
+      "type": "semantic",
+      "content": "For git commits, always use a HEREDOC for the message to ensure proper formatting: git commit -m \"$(cat <<'EOF'\\nMessage here\\nEOF\\n)\"",
+      "domains": ["claude-code", "git"],
+      "tags": ["git"]
+    },
+    {
+      "type": "semantic",
+      "content": "Avoid backwards-compatibility hacks like renaming unused _vars, re-exporting types, or adding // removed comments. If something is unused, delete it completely.",
+      "domains": ["claude-code"],
+      "tags": ["code-quality"]
+    },
+    {
+      "type": "antipattern",
+      "content": "Don't generate or guess URLs unless confident they're for programming help. Only use URLs provided by the user or found in local files.",
+      "domains": ["claude-code"],
+      "severity": "medium",
+      "tags": ["security"]
+    }
+  ]
+}
