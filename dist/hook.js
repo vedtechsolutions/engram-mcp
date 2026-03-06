@@ -6828,6 +6828,39 @@ function handlePostCompact(stdinJson) {
     if (!recovery) return;
     const budget = new OutputBudget(OUTPUT_BUDGET.POST_COMPACT_MAX_BYTES);
     const lines = [];
+    const cog = state.cognitive_state;
+    const cogCtx = recovery.working_state?.cognitive_context;
+    const hasAnyCognitive = cog?.current_approach || cog?.active_hypothesis || cog?.recent_discovery || cogCtx?.planned_next_step || recovery.continuation_hint;
+    if (hasAnyCognitive) {
+      const mindLines = ["[Engram] Before compaction, you were:"];
+      if (state.active_task) mindLines.push(`  Task: ${truncate(state.active_task, 200)}`);
+      if (cog?.session_phase) mindLines.push(`  Phase: ${cog.session_phase}`);
+      if (cog?.current_approach) mindLines.push(`  Approach: ${truncate(cog.current_approach, 300)}`);
+      if (cog?.active_hypothesis) mindLines.push(`  Hypothesis: ${truncate(cog.active_hypothesis, 300)}`);
+      if (cog?.recent_discovery) mindLines.push(`  Discovery: ${truncate(cog.recent_discovery, 300)}`);
+      if (cogCtx?.planned_next_step) mindLines.push(`  Next step: ${truncate(cogCtx.planned_next_step, 200)}`);
+      if (cog?.search_intent) mindLines.push(`  Investigating: ${truncate(cog.search_intent, 200)}`);
+      const ruledOut = (state.session_outcomes ?? []).filter((o) => o.includes("\u2192 fail") || o.includes("\u2192 dead end") || o.includes("\u2192 blocked"));
+      if (ruledOut.length > 0) {
+        mindLines.push(`  Already tried (didn't work):`);
+        for (const o of ruledOut.slice(-3)) mindLines.push(`    - ${truncate(o, 150)}`);
+      }
+      const blockers = recovery.working_state?.active_blockers ?? [];
+      if (blockers.length > 0) {
+        mindLines.push(`  Blockers: ${blockers.slice(0, 3).map((b) => truncate(b, 100)).join("; ")}`);
+      }
+      if (state.recent_errors.length > 0) {
+        mindLines.push(`  Recent errors: ${state.recent_errors.slice(-2).map((e) => truncate(e, 100)).join("; ")}`);
+      }
+      if (state.session_files.length > 0) {
+        const files = state.session_files.slice(-8).map((f) => f.split(/[/\\]/).pop() ?? f);
+        mindLines.push(`  Files: ${files.join(", ")}`);
+      }
+      if (recovery.continuation_hint) {
+        mindLines.push(`  Continue: ${truncate(recovery.continuation_hint, 300)}`);
+      }
+      lines.push(mindLines.join("\n"));
+    }
     try {
       const transcriptPath = stdinJson?.transcript_path ?? null;
       if (transcriptPath) {
