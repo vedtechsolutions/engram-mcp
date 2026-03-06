@@ -17,10 +17,10 @@ Engram gives Claude Code **persistent, cross-session memory** that learns from e
 
 ```bash
 # Install
-npm install -g engram-mcp
+npm install -g @vedtechsolutions/engram-mcp
 
 # Configure Claude Code
-npx engram-setup
+npx @vedtechsolutions/engram-mcp setup
 ```
 
 That's it. Start a new Claude Code session and Engram activates automatically.
