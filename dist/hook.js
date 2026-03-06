@@ -79,6 +79,7 @@ import {
   estimateTokens,
   extractErrorFingerprint,
   extractKeywords,
+  extractModuleFromPath,
   findDuplicate,
   findErrorByFingerprint,
   findResolutionForError,
@@ -172,7 +173,7 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-AC6AZCP4.js";
+} from "./chunk-QU7DOPA4.js";
 
 // src/hook.ts
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, appendFileSync, openSync, readSync, closeSync } from "fs";
@@ -3527,9 +3528,7 @@ function handlePreWrite(toolInput, argFallback) {
     if (filePath) {
       const fileCount = (watcherState.prewrite_file_counts[filePath] ?? 0) + 1;
       watcherState.prewrite_file_counts[filePath] = fileCount;
-      if (fileCount <= CODE_CONTEXT_RECALL.PREWRITE_COOLDOWN_PER_FILE) {
-        skipCodeRecall = fileCount > 1;
-      }
+      skipCodeRecall = fileCount % CODE_CONTEXT_RECALL.PREWRITE_COOLDOWN_PER_FILE !== 1;
       saveWatcherState(watcherState);
     }
     if (!skipCodeRecall && content.length >= CODE_CONTEXT_RECALL.MIN_CONTENT_LENGTH) {
@@ -3540,18 +3539,30 @@ function handlePreWrite(toolInput, argFallback) {
           project: watcherState.active_project
         }, config.retrieval);
         const activeDomain = watcherState.active_domain;
+        const currentModule = filePath ? extractModuleFromPath(filePath) : null;
+        const isModuleMismatch = (mem) => {
+          if (!currentModule) return false;
+          const memFiles = mem.memory.encoding_context?.files;
+          if (!memFiles || memFiles.length === 0) return false;
+          const memModules = memFiles.map(extractModuleFromPath).filter(Boolean);
+          if (memModules.length === 0) return false;
+          return !memModules.includes(currentModule);
+        };
         for (const p of codeResult.patterns) {
           if (p.activation < CODE_CONTEXT_RECALL.MIN_PREWRITE_ACTIVATION) continue;
           if (p.memory.type === "episodic") continue;
           if (activeDomain && p.memory.encoding_context?.framework && p.memory.encoding_context.framework !== activeDomain) continue;
+          if (isModuleMismatch(p)) continue;
           contextLines.push(`[ENGRAM PATTERN] ${truncate(p.memory.content, 200)}`);
         }
         for (const c of codeResult.conventions) {
           if (c.activation < CODE_CONTEXT_RECALL.MIN_PREWRITE_ACTIVATION) continue;
           if (activeDomain && c.memory.encoding_context?.framework && c.memory.encoding_context.framework !== activeDomain) continue;
+          if (isModuleMismatch(c)) continue;
           contextLines.push(`[ENGRAM CONVENTION] ${truncate(c.memory.content, 200)}`);
         }
         for (const p of codeResult.procedural) {
+          if (isModuleMismatch(p)) continue;
           contextLines.push(`[ENGRAM HOW-TO] ${truncate(p.memory.content, 200)}`);
         }
       } catch (e) {

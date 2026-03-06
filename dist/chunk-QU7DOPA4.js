@@ -1710,7 +1710,11 @@ var CONTEXTUAL = {
   /** Penalty multiplier for project mismatch on episodic memories (0.3 = 70% reduction) */
   PROJECT_MISMATCH_PENALTY: 0.3,
   /** Boost for failure experiences with lessons (surfaces "I tried this and it didn't work") */
-  FAILURE_EXPERIENCE_BOOST: 0.2
+  FAILURE_EXPERIENCE_BOOST: 0.2,
+  /** Boost when memory files share the same module directory as current file */
+  MODULE_PROXIMITY_BOOST: 0.2,
+  /** Penalty multiplier when memory files are all from a different module (0.3 = 70% reduction) */
+  MODULE_MISMATCH_PENALTY: 0.3
 };
 var REWARD = {
   /** Seed activation boost for positively-reinforced memories */
@@ -8758,6 +8762,19 @@ function extractCodeContext(code, filePath) {
     identifiers: uniqueTerms
   };
 }
+function extractModuleFromPath(filePath) {
+  const parts = filePath.split(/[/\\]/).filter(Boolean);
+  const markers = ["addons", "custom-addons", "extra-addons", "packages", "apps"];
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (markers.includes(parts[i]) && i + 1 < parts.length) {
+      return parts[i + 1];
+    }
+  }
+  if (parts.length >= 3) {
+    return parts[parts.length - 3];
+  }
+  return null;
+}
 function detectLanguage(code, filePath) {
   if (filePath) {
     const ext = filePath.split(".").pop()?.toLowerCase();
@@ -9033,6 +9050,18 @@ function contextualBoost(memory, context) {
   if (context.current_files.length > 0 && enc.files.length > 0) {
     const overlap = context.current_files.filter((f) => enc.files.includes(f)).length;
     boost += Math.min(overlap * CONTEXTUAL.FILE_BOOST_PER_MATCH, CONTEXTUAL.FILE_BOOST_CAP);
+    if (overlap === 0) {
+      const currentModules = context.current_files.map(extractModuleFromPath).filter(Boolean);
+      const memModules = enc.files.map(extractModuleFromPath).filter(Boolean);
+      if (currentModules.length > 0 && memModules.length > 0) {
+        const moduleOverlap = currentModules.some((m) => memModules.includes(m));
+        if (moduleOverlap) {
+          boost += CONTEXTUAL.MODULE_PROXIMITY_BOOST;
+        } else {
+          return (1 + boost) * CONTEXTUAL.MODULE_MISMATCH_PENALTY;
+        }
+      }
+    }
   }
   if (context.current_error && enc.error_context) {
     const errorKeywords = context.current_error.toLowerCase().split(/\s+/).slice(0, 10);
@@ -12541,6 +12570,7 @@ export {
   computeActivationProfile,
   contextualRecall,
   codeContextRecall,
+  extractModuleFromPath,
   findSimilarDecisions,
   formatDecisionInjection,
   findSimilarChains,
@@ -12597,4 +12627,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-AC6AZCP4.js.map
+//# sourceMappingURL=chunk-QU7DOPA4.js.map
