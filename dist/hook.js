@@ -3211,12 +3211,53 @@ function loadWatcherState() {
   };
 }
 function saveWatcherState(state) {
+  sanitizeCognitiveState(state);
   const watcherPath = getWatcherPath(activeSessionId);
   try {
     const tmpPath = watcherPath + ".tmp";
     writeFileSync(tmpPath, JSON.stringify(state), "utf-8");
     renameSync(tmpPath, watcherPath);
   } catch {
+  }
+}
+function sanitizeCognitiveState(state) {
+  const cog = state.cognitive_state;
+  if (!cog) return;
+  const placeholders = ["X", "X.", "Y", "Y.", "Z", "Z."];
+  if (cog.current_approach && placeholders.includes(cog.current_approach)) {
+    cog.current_approach = null;
+  }
+  if (cog.active_hypothesis && placeholders.includes(cog.active_hypothesis)) {
+    cog.active_hypothesis = null;
+  }
+  if (cog.recent_discovery && placeholders.includes(cog.recent_discovery)) {
+    cog.recent_discovery = null;
+  }
+  if (cog.active_hypothesis && cog.active_hypothesis.startsWith("/")) {
+    cog.active_hypothesis = null;
+  }
+  if (cog.search_intent && cog.search_intent.startsWith("/")) {
+    cog.search_intent = null;
+  }
+  if (cog.current_approach && cog.current_approach.length < 5) {
+    cog.current_approach = null;
+  }
+  if (cog.current_approach && cog.current_approach.startsWith("Pre-compaction")) {
+    cog.current_approach = null;
+  }
+  if (cog.recent_discovery && cog.recent_discovery.startsWith("Pre-compaction")) {
+    cog.recent_discovery = null;
+  }
+  if (!state.active_task || state.active_task === "unknown task") {
+    const editedFiles = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write").map((a) => a.target.split(/[/\\]/).pop() ?? a.target);
+    const uniqueFiles = [...new Set(editedFiles)].slice(-5);
+    if (uniqueFiles.length > 0) {
+      if (cog.current_approach && cog.current_approach.length >= 10) {
+        state.active_task = cog.current_approach.slice(0, 150);
+      } else {
+        state.active_task = `Working on ${uniqueFiles.join(", ")}`;
+      }
+    }
   }
 }
 function deleteSessionState() {
@@ -5588,23 +5629,38 @@ function buildContinuationBrief(state) {
   const cog = state.cognitive_state;
   const task = state.active_task ?? cog.current_approach ?? (state.session_files.length > 0 ? `Working on ${state.session_files.slice(-3).map((f) => f.split(/[/\\]/).pop() ?? f).join(", ")}` : "unknown task");
   const lastActions = state.recent_actions.slice(-8).map((a) => {
+    if (a.tool === "Edit" || a.tool === "Write") {
+      const shortPath = a.target.length > 60 ? "..." + a.target.slice(-57) : a.target;
+      return `${a.tool}: ${shortPath}`;
+    }
+    if (a.tool === "Bash") {
+      return `Bash: ${truncate(a.target, 100)}`;
+    }
     const fileName = a.target.includes("/") ? a.target.split(/[/\\]/).pop() ?? a.target : a.target;
     return `${a.tool}: ${truncate(fileName, 80)}`;
   });
   const nextSteps = [];
+  if (cog.recent_discovery && cog.recent_discovery.length > 10) {
+    nextSteps.push(`Act on finding: ${truncate(cog.recent_discovery, 120)}`);
+  }
   if (cog.search_intent && !nextSteps.some((s) => s.includes(cog.search_intent))) {
     nextSteps.push(`Investigate: ${cog.search_intent}`);
   }
   const lastAction = state.recent_actions[state.recent_actions.length - 1];
   if (lastAction && nextSteps.length === 0) {
     if (lastAction.tool === "Edit" || lastAction.tool === "Write") {
-      nextSteps.push("Run tests to verify changes");
+      nextSteps.push(`Continue editing ${lastAction.target.split(/[/\\]/).pop() ?? lastAction.target}, then run tests`);
     } else if (lastAction.tool === "Bash" && lastAction.target.includes("test")) {
       nextSteps.push("Review test results and commit if passing");
+    } else if (lastAction.tool === "Bash" && lastAction.target.includes("push")) {
+      nextSteps.push("Verify push succeeded, publish if needed");
     }
   }
   if (state.recent_errors.length > 0 && nextSteps.length < 3) {
     nextSteps.push(`Fix: ${truncate(state.recent_errors[state.recent_errors.length - 1], 120)}`);
+  }
+  if (cog.active_hypothesis && cog.active_hypothesis.length > 5) {
+    nextSteps.push(`Testing hypothesis: ${truncate(cog.active_hypothesis, 120)}`);
   }
   const decisions = [];
   for (const id of state.decision_memory_ids.slice(-5)) {
@@ -5617,6 +5673,15 @@ function buildContinuationBrief(state) {
   const triedFailed = (state.session_outcomes ?? []).filter((o) => o.includes("\u2192 fail") || o.includes("\u2192 dead end") || o.includes("\u2192 blocked")).slice(-5).map((o) => truncate(o, 120));
   const editActions = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write");
   const keyFiles = [...new Set(editActions.map((a) => a.target))].slice(-10);
+  const recentBash = state.recent_commands?.slice(-5) ?? [];
+  if (recentBash.length > 0) {
+    const bashSummary = recentBash.map((c) => truncate(c.cmd, 80));
+    for (const cmd of bashSummary) {
+      if (lastActions.length < 12) {
+        lastActions.push(`Ran: ${cmd}`);
+      }
+    }
+  }
   return {
     task: truncate(task, 300),
     phase: cog.session_phase ?? "unknown",
@@ -6215,32 +6280,7 @@ ${distillLines}`
       }
     }
   }
-  if (!state.active_task || state.active_task === "write a comprehensive report") {
-    const editedFiles = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write").map((a) => a.target.split(/[/\\]/).pop() ?? a.target);
-    const uniqueFiles = [...new Set(editedFiles)].slice(-5);
-    if (uniqueFiles.length > 0) {
-      const cog = state.cognitive_state;
-      if (cog.current_approach && cog.current_approach.length > 5 && cog.current_approach !== "X") {
-        state.active_task = truncate(cog.current_approach, 150);
-      } else {
-        state.active_task = `Working on ${uniqueFiles.join(", ")}`;
-      }
-    }
-  }
   try {
-    const cog = state.cognitive_state;
-    if (cog.current_approach === "X" || cog.current_approach === "X.") {
-      state.cognitive_state.current_approach = null;
-    }
-    if (cog.active_hypothesis === "Y" || cog.active_hypothesis === "Y.") {
-      state.cognitive_state.active_hypothesis = null;
-    }
-    if (cog.recent_discovery === "Z" || cog.recent_discovery === "Z.") {
-      state.cognitive_state.recent_discovery = null;
-    }
-    if (cog.active_hypothesis && cog.active_hypothesis.startsWith("/")) {
-      state.cognitive_state.active_hypothesis = null;
-    }
     if (content.length >= 20 && !state.cognitive_state.current_approach) {
       const approach = extractApproachFromPrompt(content);
       if (approach) {
@@ -6395,6 +6435,7 @@ ${distillLines}`
             if (isRecallNoise(m.memory.content, m.memory.type, m.memory.tags)) continue;
             if (m.memory.tags.includes("pre-compact")) continue;
             if (m.memory.tags.includes("session-narrative")) continue;
+            if (m.memory.tags.includes("milestone") || m.memory.content.startsWith("Session milestone")) continue;
             const isFailure = m.memory.type === "episodic" && isEpisodicData(m.memory.type_data) && m.memory.type_data.outcome === "negative";
             const prefix = m.somatic_marker ? "[ENGRAM GUT]" : isFailure ? "[ENGRAM CAUTION]" : "[ENGRAM CONTEXT]";
             const outcomeHint = m.memory.type === "episodic" && (m.somatic_marker || isFailure) ? getEpisodicOutcomeHint(m.memory) : "";
@@ -6540,6 +6581,8 @@ ${distillLines}`
           if (contextOutputIds.has(mem.id)) continue;
           if (isRecallNoise(mem.content, mem.type, mem.tags)) continue;
           if (mem.tags.includes("pre-compact")) continue;
+          if (mem.tags.includes("session-narrative")) continue;
+          if (mem.tags.includes("milestone") || mem.content.startsWith("Session milestone")) continue;
           if (state.active_project && mem.encoding_context?.project && mem.encoding_context.project !== state.active_project && (mem.type === "episodic" || mem.type === "semantic" && mem.domains.length > 0)) continue;
           const lastTurn = state.proactive_injection_turns[mem.id];
           if (lastTurn !== void 0 && state.total_turns - lastTurn < PROACTIVE_RECALL.MIN_TURNS_BETWEEN_SAME) continue;
@@ -7129,11 +7172,21 @@ function handlePostCompact(stdinJson) {
     }
     const cogCtx2 = recovery.working_state?.cognitive_context;
     const queryParts = [];
-    if (state.active_task) queryParts.push(state.active_task.split(/[.;!\n]/)[0] ?? "");
-    if (cogCtx2?.current_approach) queryParts.push(cogCtx2.current_approach);
-    if (cogCtx2?.active_hypothesis) queryParts.push(cogCtx2.active_hypothesis);
-    if (cogCtx2?.recent_discovery) queryParts.push(cogCtx2.recent_discovery);
-    if (queryParts.length < 2) {
+    if (brief?.task && brief.task !== "unknown task") {
+      queryParts.push(brief.task.split(/[.;!\n]/)[0] ?? "");
+    } else if (state.active_task) {
+      queryParts.push(state.active_task.split(/[.;!\n]/)[0] ?? "");
+    }
+    if (cogCtx2?.current_approach && !queryParts.some((q) => q.includes(cogCtx2.current_approach.slice(0, 20)))) {
+      queryParts.push(cogCtx2.current_approach);
+    }
+    if (brief?.key_files && brief.key_files.length > 0) {
+      const fileNames = brief.key_files.slice(-3).map((f) => f.split(/[/\\]/).pop() ?? f).filter((f) => f.length > 2);
+      if (fileNames.length > 0) {
+        queryParts.push(fileNames.join(" "));
+      }
+    }
+    if (queryParts.length < 1) {
       queryParts.push(...recovery.high_value_topics.slice(0, 6));
     }
     const query = queryParts.join(" ");

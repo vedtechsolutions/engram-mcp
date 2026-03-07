@@ -6,6 +6,32 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
+## [1.0.11] — 2026-03-06 — Post-Compact Continuation Fix
+
+### Bug Fixes
+- **Placeholder cleanup at save time** — `sanitizeCognitiveState()` now runs on every `saveWatcherState()` call, ensuring pre-compact snapshots never contain "Approach: X", "Hypothesis: Y", "Discovery: Z" garbage values. Previously cleaned only at read/injection time, which was too late.
+- **Task inference from work activity** — when no explicit task is set, `active_task` is now auto-inferred from recent Edit/Write targets in `sanitizeCognitiveState()`.
+- **Session-narrative/milestone noise in recall** — filtered from both `[ENGRAM CONTEXT]` (step 3a) and `[ENGRAM PROACTIVE]` (step 3z) so old session summaries don't surface as actionable knowledge.
+
+### Improvements
+- **Enriched ContinuationBrief** — full file paths for Edit/Write actions, bash command summaries for workflow context, discovery-driven next steps, hypothesis tracking, and "continue editing X" inferences.
+- **Task-targeted post-compact recall** — uses the continuation brief's concrete task + key file names as the query, not vague cognitive context fields. Falls back to high-value topics only when nothing concrete exists.
+- **Pre-compaction prefix filter** — cognitive state values starting with "Pre-compaction" are cleared (regurgitated template strings).
+
+### Tests
+- 11 new tests in `tests/continuation-brief.test.ts` (sanitization patterns, brief structure, phase detection)
+- 89 test files, 1824 tests total
+
+---
+
+## [1.0.10] — 2026-03-06 — Version Alignment
+
+### Housekeeping
+- **Consistent versioning** — README, CHANGELOG, and package.json now all use the same 1.0.x version scheme
+- Test count updated: 1813 tests across 88 files
+
+---
+
 ## [1.0.9] — 2026-03-06 — Session Narrative Fix
 
 ### Bug Fix
