@@ -1737,7 +1737,15 @@ var CONTEXTUAL = {
   /** Boost when memory files share the same module directory as current file */
   MODULE_PROXIMITY_BOOST: 0.2,
   /** Penalty multiplier when memory files are all from a different module (0.3 = 70% reduction) */
-  MODULE_MISMATCH_PENALTY: 0.3
+  MODULE_MISMATCH_PENALTY: 0.3,
+  /** Minimum access_count before staleness penalty applies */
+  STALE_ACCESS_THRESHOLD: 15,
+  /** access_count / reinforcement ratio above which staleness kicks in */
+  STALE_RATIO_THRESHOLD: 8,
+  /** Penalty reduction per unit above STALE_RATIO_THRESHOLD */
+  STALE_PENALTY_PER_UNIT: 0.05,
+  /** Maximum staleness penalty (caps the reduction) */
+  MAX_STALE_PENALTY: 0.4
 };
 var REWARD = {
   /** Seed activation boost for positively-reinforced memories */
@@ -9114,6 +9122,16 @@ function contextualBoost(memory, context) {
   if (isEpisodicData(memory.type_data) && memory.type_data.outcome === "negative" && memory.type_data.lesson) {
     boost += CONTEXTUAL.FAILURE_EXPERIENCE_BOOST;
   }
+  if (memory.access_count >= CONTEXTUAL.STALE_ACCESS_THRESHOLD) {
+    const accessToReinforcementRatio = memory.access_count / Math.max(memory.reinforcement, 0.5);
+    if (accessToReinforcementRatio > CONTEXTUAL.STALE_RATIO_THRESHOLD) {
+      const stalePenalty = Math.min(
+        (accessToReinforcementRatio - CONTEXTUAL.STALE_RATIO_THRESHOLD) * CONTEXTUAL.STALE_PENALTY_PER_UNIT,
+        CONTEXTUAL.MAX_STALE_PENALTY
+      );
+      boost -= stalePenalty;
+    }
+  }
   return 1 + boost;
 }
 function rewardModifier(memory) {
@@ -12654,4 +12672,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-V5TTXT4V.js.map
+//# sourceMappingURL=chunk-OY2XHPUF.js.map

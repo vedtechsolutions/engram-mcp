@@ -174,7 +174,7 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-V5TTXT4V.js";
+} from "./chunk-OY2XHPUF.js";
 
 // src/hook.ts
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, appendFileSync, openSync, readSync, closeSync } from "fs";
@@ -2830,7 +2830,9 @@ function extractSearchIntent(query) {
 function updateCognitiveState(current, signal, recentTools, recentErrors) {
   const updated = { ...current };
   updated.last_updated = (/* @__PURE__ */ new Date()).toISOString();
-  updated.session_phase = recentErrors.length > 0 ? "debugging" : inferSessionPhase(recentTools);
+  const recentWindow = recentTools.slice(-3);
+  const hasRecentErrorContext = recentErrors.length > 0 && recentWindow.some((t) => t === "Bash") && recentWindow.length >= 2;
+  updated.session_phase = hasRecentErrorContext ? "debugging" : inferSessionPhase(recentTools);
   switch (signal.type) {
     case "tool_call":
       break;
@@ -6213,7 +6215,32 @@ ${distillLines}`
       }
     }
   }
+  if (!state.active_task || state.active_task === "write a comprehensive report") {
+    const editedFiles = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write").map((a) => a.target.split(/[/\\]/).pop() ?? a.target);
+    const uniqueFiles = [...new Set(editedFiles)].slice(-5);
+    if (uniqueFiles.length > 0) {
+      const cog = state.cognitive_state;
+      if (cog.current_approach && cog.current_approach.length > 5 && cog.current_approach !== "X") {
+        state.active_task = truncate(cog.current_approach, 150);
+      } else {
+        state.active_task = `Working on ${uniqueFiles.join(", ")}`;
+      }
+    }
+  }
   try {
+    const cog = state.cognitive_state;
+    if (cog.current_approach === "X" || cog.current_approach === "X.") {
+      state.cognitive_state.current_approach = null;
+    }
+    if (cog.active_hypothesis === "Y" || cog.active_hypothesis === "Y.") {
+      state.cognitive_state.active_hypothesis = null;
+    }
+    if (cog.recent_discovery === "Z" || cog.recent_discovery === "Z.") {
+      state.cognitive_state.recent_discovery = null;
+    }
+    if (cog.active_hypothesis && cog.active_hypothesis.startsWith("/")) {
+      state.cognitive_state.active_hypothesis = null;
+    }
     if (content.length >= 20 && !state.cognitive_state.current_approach) {
       const approach = extractApproachFromPrompt(content);
       if (approach) {
