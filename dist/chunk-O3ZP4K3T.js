@@ -11178,14 +11178,17 @@ function inferRole(nodeType, filePath, analysis) {
 
 // src/engines/curator.ts
 import { existsSync as existsSync5, readFileSync as readFileSync4, writeFileSync, realpathSync as realpathSync2, lstatSync as lstatSync2, renameSync } from "fs";
-import { join as join5, dirname as dirname3 } from "path";
+import { join as join5, dirname as dirname3, resolve as resolve3 } from "path";
 import { homedir as homedir3 } from "os";
 var logger14 = createLogger("curator");
 var lastBridgeWriteTime = 0;
 function discoverMemoryDir(cwd) {
   const envDir = process.env.CLAUDE_MEMORY_DIR;
-  if (envDir && existsSync5(envDir)) {
-    return envDir;
+  if (envDir && envDir.startsWith("/") && !envDir.includes("\0") && envDir.length < 1e3) {
+    const resolvedEnv = resolve3(envDir);
+    if (resolvedEnv === resolve3(resolvedEnv) && existsSync5(resolvedEnv)) {
+      return resolvedEnv;
+    }
   }
   const home = homedir3();
   const projectsBase = join5(home, ".claude", "projects");
@@ -12672,4 +12675,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-OY2XHPUF.js.map
+//# sourceMappingURL=chunk-O3ZP4K3T.js.map

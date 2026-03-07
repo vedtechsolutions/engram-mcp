@@ -174,10 +174,10 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-OY2XHPUF.js";
+} from "./chunk-O3ZP4K3T.js";
 
 // src/hook.ts
-import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, appendFileSync, openSync, readSync, closeSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, openSync, readSync, closeSync } from "fs";
 import { join, basename, resolve } from "path";
 import { homedir } from "os";
 
@@ -2886,14 +2886,38 @@ function readStdin() {
       return;
     }
     let data = "";
+    const MAX_STDIN_BYTES = 10 * 1024 * 1024;
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
       data += chunk;
+      if (data.length > MAX_STDIN_BYTES) {
+        data = data.slice(0, MAX_STDIN_BYTES);
+        process.stdin.destroy();
+        resolve2(data);
+      }
     });
     process.stdin.on("end", () => resolve2(data));
     process.stdin.on("error", () => resolve2(""));
     setTimeout(() => resolve2(data), 2e3);
   });
+}
+function validateTranscriptPath(p) {
+  if (!p || typeof p !== "string") return null;
+  const resolved = resolve(p);
+  const allowed = join(homedir(), ".claude", "projects");
+  if (!resolved.startsWith(allowed + "/") || !resolved.endsWith(".jsonl")) return null;
+  return resolved;
+}
+function validateSessionId(sid) {
+  if (!sid || typeof sid !== "string") return null;
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(sid)) return null;
+  return sid;
+}
+function validateCwd(cwd) {
+  if (!cwd || typeof cwd !== "string") return null;
+  if (!cwd.startsWith("/")) return null;
+  if (cwd.includes("\0") || cwd.length > 1e3) return null;
+  return cwd;
 }
 function distillLesson(context) {
   const parts = [];
@@ -3346,6 +3370,12 @@ function writeSessionHandoff(state, narrative) {
     reasoning_trail: reasoningTrail.slice(0, 10)
   };
   try {
+    const serialized = JSON.stringify(handoff, null, 2);
+    if (serialized.length > 65536) {
+      log.warn("Session handoff too large, truncating", { size: serialized.length });
+      handoff.reasoning_trail = handoff.reasoning_trail.slice(0, 3);
+      handoff.lessons = handoff.lessons.slice(0, 3);
+    }
     const tmpPath = handoffPath + ".tmp";
     writeFileSync(tmpPath, JSON.stringify(handoff, null, 2), "utf-8");
     renameSync(tmpPath, handoffPath);
@@ -3466,16 +3496,16 @@ var [command, ...args] = process.argv.slice(2);
 async function main() {
   const stdinRaw = await readStdin();
   const stdinJson = safeParse(stdinRaw);
-  const stdinSessionId = stdinJson?.session_id;
-  if (stdinSessionId && typeof stdinSessionId === "string" && stdinSessionId.length > 0 && stdinSessionId.length <= 200) {
-    activeSessionId = stdinSessionId;
+  const validatedSessionId = validateSessionId(stdinJson?.session_id);
+  if (validatedSessionId) {
+    activeSessionId = validatedSessionId;
   } else if (process.env.ENGRAM_SESSION_ID) {
-    activeSessionId = process.env.ENGRAM_SESSION_ID;
+    const envSessionId = validateSessionId(process.env.ENGRAM_SESSION_ID);
+    if (envSessionId) activeSessionId = envSessionId;
   }
   migrateLegacyWatcherState();
   try {
-    const stdinCwd = stdinJson?.cwd;
-    const cwdForDb = stdinCwd ?? process.cwd();
+    const cwdForDb = validateCwd(stdinJson?.cwd) ?? process.cwd();
     const projectRoot = inferProjectPath(cwdForDb);
     const projectDbPath = deriveProjectDbPath(projectRoot);
     initProjectDatabase(projectDbPath);
@@ -3496,29 +3526,12 @@ async function main() {
       handlePostToolGeneric(stdinJson);
       break;
     case "notification": {
-      try {
-        appendFileSync(
-          join(homedir(), ".engram", "notification-debug.log"),
-          `[${(/* @__PURE__ */ new Date()).toISOString()}] NOTIFICATION stdin_keys=${Object.keys(stdinJson ?? {}).join(",")}
-`
-        );
-      } catch {
-      }
       const notifType = stdinJson?.notification_type ?? args[0] ?? "general";
       const notifMessage = stdinJson?.message ?? args[1] ?? "";
       handleNotification(notifType, notifMessage);
       break;
     }
     case "session-start":
-      try {
-        const src = stdinJson?.source ?? "unknown";
-        appendFileSync(
-          join(homedir(), ".engram", "notification-debug.log"),
-          `[${(/* @__PURE__ */ new Date()).toISOString()}] SESSION-START source=${src} stdin_keys=${Object.keys(stdinJson ?? {}).join(",")}
-`
-        );
-      } catch {
-      }
       handleSessionStart(stdinJson, args[0]);
       break;
     case "session-end":
@@ -3532,14 +3545,6 @@ async function main() {
       handleEngramUsed(stdinJson, args[0]);
       break;
     case "pre-compact":
-      try {
-        appendFileSync(
-          join(homedir(), ".engram", "notification-debug.log"),
-          `[${(/* @__PURE__ */ new Date()).toISOString()}] PRE-COMPACT stdin=${JSON.stringify(stdinJson).slice(0, 2e3)}
-`
-        );
-      } catch {
-      }
       handlePreCompact();
       break;
     case "prompt-check":
@@ -4784,12 +4789,6 @@ function extractFilesFromToolCall(tool, input, output) {
 function handleNotification(type, data) {
   try {
     log.info("Notification received", { type, data: truncate(data, 300) });
-    try {
-      const debugLine = `[${(/* @__PURE__ */ new Date()).toISOString()}] type=${type} data=${truncate(data, 500)}
-`;
-      appendFileSync(join(homedir(), ".engram", "notification-debug.log"), debugLine);
-    } catch {
-    }
     const isContextWarning = type === "context_window" || type === "context" || /context.*(low|full|limit|running out|compact)/i.test(data) || /remaining.*context/i.test(data);
     if (isContextWarning) {
       log.info("Context pressure detected \u2014 proactive offload triggered", { type, data });
@@ -5995,7 +5994,7 @@ function handlePromptCheck(stdinJson, argFallback) {
   }
   try {
     if (state.total_turns > 0 && state.total_turns % CONTEXT_PRESSURE.MIN_TURNS_BETWEEN_CHECKS === 0) {
-      const transcriptPath = stdinJson?.transcript_path;
+      const transcriptPath = validateTranscriptPath(stdinJson?.transcript_path);
       const remaining = estimateContextRemaining(transcriptPath);
       if (remaining !== null) {
         state.last_context_remaining = remaining;
@@ -6178,7 +6177,7 @@ function handlePromptCheck(stdinJson, argFallback) {
   } catch {
   }
   try {
-    const transcriptPath2 = stdinJson?.transcript_path;
+    const transcriptPath2 = validateTranscriptPath(stdinJson?.transcript_path);
     if (transcriptPath2 && state.total_turns > 0 && state.total_turns - state.last_reasoning_extraction_turn >= TRANSCRIPT_REASONING.EXTRACTION_INTERVAL_TURNS && state.reasoning_extraction_count < TRANSCRIPT_REASONING.MAX_PER_SESSION && canEncodeReasoning(state)) {
       const reasoningSnippets = extractReasoningFromTranscript(transcriptPath2);
       for (const snippet of reasoningSnippets.slice(0, 2)) {
@@ -7186,7 +7185,7 @@ function handlePostCompact(stdinJson) {
       }
     }
     try {
-      const transcriptPath = stdinJson?.transcript_path ?? null;
+      const transcriptPath = validateTranscriptPath(stdinJson?.transcript_path);
       if (transcriptPath) {
         const reasoningSnippets = extractReasoningFromTranscript(transcriptPath, TRANSCRIPT_REASONING.POST_COMPACT_MAX_MESSAGES);
         if (reasoningSnippets.length > 0) {

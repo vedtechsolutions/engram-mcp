@@ -1,6 +1,6 @@
 {
   "name": "@vedtechsolutions/engram-mcp",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "Cognitive memory system for AI — persistent, cross-session learning via MCP",
   "type": "module",
   "main": "dist/index.js",
