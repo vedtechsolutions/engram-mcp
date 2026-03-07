@@ -7595,7 +7595,9 @@ function extractFilePath(command2) {
 }
 function containsError(output) {
   const lower = output.toLowerCase();
-  return lower.includes("error") || lower.includes("exception") || lower.includes("traceback") || lower.includes("failed") || lower.includes("fatal") || lower.includes("panic");
+  if (!/error|exception|traceback|failed|fatal|panic/.test(lower)) return false;
+  const stripped = lower.replace(/corrected.*?errors?/g, "").replace(/no\s+errors?\b/g, "").replace(/\b0\s+errors?\b/g, "").replace(/errors?\s+corrected/g, "").replace(/grep.*?error[^\n]*/g, "").replace(/warn\b[^\n]*/g, "");
+  return stripped.includes("error") || stripped.includes("exception") || stripped.includes("traceback") || stripped.includes("failed") || stripped.includes("fatal") || stripped.includes("panic");
 }
 export {
   OutputBudget,
