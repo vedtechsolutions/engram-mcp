@@ -11227,7 +11227,13 @@ function composeBridgeContent(options) {
       task: options.task,
       files_modified: 0,
       recent_files: options.recent_files?.slice(0, 10) ?? [],
-      recent_errors: options.recent_errors?.slice(0, 3) ?? []
+      // GAP 26: Filter false-positive errors before display (git log with "error" in commit msg, etc.)
+      recent_errors: (options.recent_errors ?? []).filter((err) => {
+        const lower = err.toLowerCase();
+        if (/^git (log|show|diff|shortlog)\b/.test(err)) return false;
+        if (/^\{"stdout"/.test(err)) return false;
+        return true;
+      }).slice(0, 3)
     },
     cognitive: {
       approach: options.cognitive?.approach ?? null,
@@ -11276,6 +11282,7 @@ function composeBridgeContent(options) {
     const cutoffIso = cutoffDate.toISOString();
     const candidates = getRecentMemories(50).filter(
       (m) => m.confidence >= 0.6 && m.created_at >= cutoffIso && m.type !== "antipattern" && // antipatterns already in warnings
+      !m.tags.includes("synthesis") && // GAP 24: skip stored synthesis (step 6 generates live)
       !isRecallNoise(m.content, m.type, m.tags)
     );
     const prioritized = candidates.sort((a, b) => {
@@ -11291,6 +11298,8 @@ function composeBridgeContent(options) {
       return b.confidence - a.confidence;
     });
     for (const m of prioritized.slice(0, CURATOR.MAX_BRIDGE_INSIGHTS)) {
+      if (/Claude needs your permission/i.test(m.content)) continue;
+      if (/^(Tool |Permission |Approval )/i.test(m.content)) continue;
       content.insights.push({
         text: m.content.substring(0, 200),
         type: m.type,
@@ -11302,13 +11311,26 @@ function composeBridgeContent(options) {
   }
   try {
     if (options.domain) {
-      const decisions = getDecisionMemoriesForDomain(options.domain, 5);
+      const decisions = getDecisionMemoriesForDomain(options.domain, 10);
+      const delegationPatterns = [
+        /^Delegated:/i,
+        /^Very thorough/i,
+        /^Perform a comprehensive/i,
+        /^Thoroughly (review|analyze|examine)/i,
+        /^Explore (the |how |\/)/i,
+        /^Design an? (implementation|phased)/i,
+        /^Research how/i
+      ];
       for (const m of decisions) {
+        if (content.active_decisions.length >= 5) break;
         const td = m.type_data;
         if (td && "kind" in td && td.kind === "decision") {
           const d = td;
+          const chosen = d.chosen ?? "";
+          if (delegationPatterns.some((p) => p.test(chosen))) continue;
+          if (chosen.length < 10) continue;
           content.active_decisions.push({
-            chosen: d.chosen?.substring(0, 150) ?? "",
+            chosen: chosen.substring(0, 150),
             rationale: d.rationale?.substring(0, 150) ?? "",
             type: d.decision_type ?? "approach"
           });
@@ -11322,8 +11344,17 @@ function composeBridgeContent(options) {
     const recentWithLessons = getRecentMemories(50).filter(
       (m) => m.type === "episodic" && m.tags.includes("has_lesson") && m.confidence >= 0.5 && !isRecallNoise(m.content, m.type, m.tags)
     ).slice(0, 5);
+    const isNoisyLesson = (lesson) => {
+      if (lesson.length < 15) return true;
+      if (/^[:\.]/.test(lesson)) return true;
+      if (/\[\/\\/.test(lesson) && /\(\?/.test(lesson)) return true;
+      if (/^(const |let |var |if \(|return )/.test(lesson)) return true;
+      if (/^\w+_\w+:/.test(lesson)) return true;
+      return false;
+    };
     for (const m of recentWithLessons) {
       if (isEpisodicData(m.type_data) && m.type_data.lesson) {
+        if (isNoisyLesson(m.type_data.lesson)) continue;
         content.lessons.push({
           text: m.type_data.lesson.substring(0, 200),
           confidence: m.confidence
@@ -12675,4 +12706,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-O3ZP4K3T.js.map
+//# sourceMappingURL=chunk-RCPTLHMM.js.map

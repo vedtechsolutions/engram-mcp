@@ -174,7 +174,7 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-O3ZP4K3T.js";
+} from "./chunk-RCPTLHMM.js";
 
 // src/hook.ts
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, openSync, readSync, closeSync } from "fs";
@@ -3268,6 +3268,7 @@ function sanitizeCognitiveState(state) {
   };
   const isCodeFragment = (val) => {
     if (/^(&{1,2}|[|]{1,2}|\+{1,2}|-{1,2}|={1,3}|!={0,2}|<|>|=>)\s/.test(val)) return true;
+    if (/^\?\s*[\(a-z_]/.test(val)) return true;
     if (/^(const |let |var |if \(|else |return |function |for \(|while \()/.test(val)) return true;
     if (/^[a-z_]+\.[a-z_]+(\.[a-z_]+)?$/i.test(val) && val.length < 60) return true;
     return false;
@@ -3389,7 +3390,7 @@ function sanitizeCognitiveState(state) {
       const parts = f.split("/").filter(Boolean);
       if (parts.length < 2 && f.startsWith("/")) return false;
       const lastPart = parts[parts.length - 1];
-      if (lastPart && f.startsWith("/") && parts.length <= 3) {
+      if (lastPart) {
         if (lastPart.startsWith(".") && !lastPart.includes(".", 1)) return false;
         if (!lastPart.includes(".")) return false;
       }
@@ -7596,7 +7597,7 @@ function extractFilePath(command2) {
 function containsError(output) {
   const lower = output.toLowerCase();
   if (!/error|exception|traceback|failed|fatal|panic/.test(lower)) return false;
-  const stripped = lower.replace(/corrected.*?errors?/g, "").replace(/no\s+errors?\b/g, "").replace(/\b0\s+errors?\b/g, "").replace(/errors?\s+corrected/g, "").replace(/grep.*?error[^\n]*/g, "").replace(/warn\b[^\n]*/g, "");
+  const stripped = lower.replace(/corrected.*?errors?/g, "").replace(/no\s+errors?\b/g, "").replace(/\b0\s+errors?\b/g, "").replace(/errors?\s+corrected/g, "").replace(/grep.*?error[^\n]*/g, "").replace(/warn\b[^\n]*/g, "").replace(/contains?error\w*/g, "").replace(/handles?error\w*/g, "").replace(/is_?error\w*/g, "").replace(/\berror[_-]\w+/g, "").replace(/"stdout":\s*"[^"]*"/g, "").replace(/\bgap\s+\d+[:\s][^\n]*/g, "");
   return stripped.includes("error") || stripped.includes("exception") || stripped.includes("traceback") || stripped.includes("failed") || stripped.includes("fatal") || stripped.includes("panic");
 }
 export {

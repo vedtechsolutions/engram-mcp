@@ -6,7 +6,22 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
-## [1.0.26] — 2026-03-07 — Post-Compact Recovery: 19 Gap Fixes + Full Data Quality
+## [1.0.29] — 2026-03-07 — Bridge Quality: 7 More Gap Fixes (GAPs 21-27)
+
+### Bridge Content Quality
+- **GAP 21**: Subagent delegation prompts filtered from Active Decisions (7 delegation patterns)
+- **GAP 22**: Ternary operator fragments (`? (cog.`) detected as code in sanitizeCognitiveState
+- **GAP 23**: Noise lessons filtered — raw regex, code fragments, truncated text, CONSTANT_NAME: patterns
+- **GAP 24**: Synthesis deduplication — stored synthesis memories excluded when live synthesis is generated
+- **GAP 25**: Permission prompts ("Claude needs your permission") filtered from bridge insights
+- **GAP 26**: `containsError()` handles camelCase identifiers (containsError, handleError), JSON stdout wrappers, and GAP commit messages. Bridge filters git log/show/diff from recent_errors
+- **GAP 27**: Directory detection extended to all depths (was only ≤3 path components)
+
+### Test Coverage
+- 47 tests in continuation-brief.test.ts (was 38, +9 for GAPs 21-27)
+- 1860 total tests across 89 files
+
+## [1.0.28] — 2026-03-07 — Post-Compact Recovery: 20 Gap Fixes + Full Data Quality
 
 ### Phase Detection & Task Inference (v1.0.23)
 - **GAP 9**: Edit/Write tools now push to recent_tool_names and call updateCognitiveState
@@ -24,9 +39,16 @@ All notable changes to the Engram cognitive memory system.
 - **GAP 18**: Sanitize prevState in handleSessionStart before injection
 - **GAP 19**: Sanitize state in handlePreCompact before building recovery context
 
+### Error Detection (v1.0.28)
+- **GAP 20**: `containsError()` false positive filtering — npm warnings like "auto-corrected some errors" no longer flag successful commands as failures
+
+### End-to-End Validation (v1.0.27)
+- 3 integration tests simulating full sanitization pipeline with real corrupted data
+- Verified: fully corrupted state → clean output, clean state → preserved, all corruption types simultaneously
+
 ### Test Coverage
-- 31 tests in continuation-brief.test.ts covering all gap patterns
-- 1844 total tests across 89 files
+- 38 tests in continuation-brief.test.ts covering all gap patterns
+- 1851 total tests across 89 files
 
 ## [1.0.21] — 2026-03-07 — Post-Compact Recovery: 10 Gap Fixes + Security Hardening
 
