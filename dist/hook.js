@@ -174,7 +174,7 @@ import {
   updateReasoningChain,
   updateSelfModelFromSession,
   updateTask
-} from "./chunk-RCPTLHMM.js";
+} from "./chunk-WJAX5KZA.js";
 
 // src/hook.ts
 import { readFileSync, writeFileSync, existsSync, renameSync, statSync, readdirSync, unlinkSync, openSync, readSync, closeSync } from "fs";

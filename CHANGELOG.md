@@ -6,7 +6,10 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
-## [1.0.30] — 2026-03-07 — 30 Gap Fixes: Full Post-Compact Recovery Pipeline
+## [1.0.31] — 2026-03-07 — 31 Gap Fixes: Complete Post-Compact Recovery Pipeline
+
+### Antipattern Display (v1.0.31)
+- **GAP 31**: Antipattern fix hints deduplicated via word-overlap detection (50% threshold). Prevents "warning text → fix text" duplication when both contain the same content rephrased.
 
 ### Bridge Content Quality (v1.0.29)
 - **GAP 21**: Subagent delegation prompts filtered from Active Decisions (7 delegation patterns)

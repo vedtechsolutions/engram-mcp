@@ -11426,7 +11426,20 @@ function formatBridgeMarkdown(content) {
   if (content.warnings.length > 0) {
     lines.push("## Watch Out For");
     for (const w of content.warnings) {
-      const fixHint = w.fix ? ` \u2192 ${w.fix}` : "";
+      const getSignificantWords = (s) => {
+        const stopWords = /* @__PURE__ */ new Set(["the", "a", "an", "is", "are", "was", "to", "of", "in", "for", "and", "or", "this", "that", "it"]);
+        return new Set(s.toLowerCase().split(/\W+/).filter((w2) => w2.length > 3 && !stopWords.has(w2)));
+      };
+      let fixHint = "";
+      if (w.fix) {
+        const textWords = getSignificantWords(w.text);
+        const fixWords = getSignificantWords(w.fix);
+        const shared = [...textWords].filter((w2) => fixWords.has(w2)).length;
+        const overlapRatio = textWords.size > 0 ? shared / textWords.size : 0;
+        if (overlapRatio < 0.5) {
+          fixHint = ` \u2192 ${w.fix}`;
+        }
+      }
       lines.push(`- **[${w.severity.toUpperCase()}]** ${w.text}${fixHint}`);
     }
     lines.push("");
@@ -12706,4 +12719,4 @@ export {
   composeProjectUnderstanding,
   formatMentalModelInjection
 };
-//# sourceMappingURL=chunk-RCPTLHMM.js.map
+//# sourceMappingURL=chunk-WJAX5KZA.js.map
