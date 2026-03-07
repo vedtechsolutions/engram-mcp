@@ -6305,7 +6305,7 @@ ${distillLines}`
       }
       const rawCandidates = getTopDomainMemories(surfaceDomain, MEMORY_SURFACE.CANDIDATE_POOL_SIZE, excludeIds, state.active_project ?? void 0);
       const candidates = rawCandidates.filter(
-        (m) => m.confidence >= MEMORY_SURFACE.MIN_SURFACE_CONFIDENCE && m.reinforcement >= MEMORY_SURFACE.MIN_SURFACE_REINFORCEMENT && !isRecallNoise(m.content, m.type, m.tags) && !m.tags.includes("session_narrative")
+        (m) => m.confidence >= MEMORY_SURFACE.MIN_SURFACE_CONFIDENCE && m.reinforcement >= MEMORY_SURFACE.MIN_SURFACE_REINFORCEMENT && !isRecallNoise(m.content, m.type, m.tags) && !m.tags.includes("session-narrative")
         // narratives are for model composition, not surfacing
       );
       const surfaced = selectDiverseSurface(candidates, MEMORY_SURFACE.MAX_SURFACE_ITEMS);
@@ -6394,7 +6394,7 @@ ${distillLines}`
             if (surfacedIds.has(m.memory.id)) continue;
             if (isRecallNoise(m.memory.content, m.memory.type, m.memory.tags)) continue;
             if (m.memory.tags.includes("pre-compact")) continue;
-            if (m.memory.tags.includes("session_narrative")) continue;
+            if (m.memory.tags.includes("session-narrative")) continue;
             const isFailure = m.memory.type === "episodic" && isEpisodicData(m.memory.type_data) && m.memory.type_data.outcome === "negative";
             const prefix = m.somatic_marker ? "[ENGRAM GUT]" : isFailure ? "[ENGRAM CAUTION]" : "[ENGRAM CONTEXT]";
             const outcomeHint = m.memory.type === "episodic" && (m.somatic_marker || isFailure) ? getEpisodicOutcomeHint(m.memory) : "";
