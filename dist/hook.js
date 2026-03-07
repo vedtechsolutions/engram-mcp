@@ -3266,13 +3266,26 @@ function sanitizeCognitiveState(state) {
     if (placeholders.includes(val)) return true;
     return templatePatterns.some((p) => p.test(val));
   };
-  if (cog.current_approach && isPlaceholderValue(cog.current_approach)) {
+  const isCodeFragment = (val) => {
+    if (/^(&{1,2}|[|]{1,2}|\+{1,2}|-{1,2}|={1,3}|!={0,2}|<|>|=>)\s/.test(val)) return true;
+    if (/^(const |let |var |if \(|else |return |function |for \(|while \()/.test(val)) return true;
+    if (/^[a-z_]+\.[a-z_]+(\.[a-z_]+)?$/i.test(val) && val.length < 60) return true;
+    return false;
+  };
+  const isSummaryArtifact = (val) => {
+    if (/\*{2,}/.test(val) && val.length < 200) return true;
+    if (/^[-*•]\s/.test(val)) return true;
+    if (/^\d+\.\s/.test(val) && val.length < 100) return true;
+    return false;
+  };
+  const isBadCogValue = (val) => isPlaceholderValue(val) || isCodeFragment(val) || isSummaryArtifact(val);
+  if (cog.current_approach && isBadCogValue(cog.current_approach)) {
     cog.current_approach = null;
   }
-  if (cog.active_hypothesis && isPlaceholderValue(cog.active_hypothesis)) {
+  if (cog.active_hypothesis && isBadCogValue(cog.active_hypothesis)) {
     cog.active_hypothesis = null;
   }
-  if (cog.recent_discovery && isPlaceholderValue(cog.recent_discovery)) {
+  if (cog.recent_discovery && isBadCogValue(cog.recent_discovery)) {
     cog.recent_discovery = null;
   }
   if (cog.active_hypothesis && cog.active_hypothesis.startsWith("/")) {
@@ -3324,6 +3337,20 @@ function sanitizeCognitiveState(state) {
       state.active_task = null;
     }
   }
+  if (state.active_task) {
+    const agentTaskPatterns = [
+      /^Very thorough/i,
+      /^Perform a comprehensive/i,
+      /^Thoroughly (review|analyze|examine|investigate)/i,
+      /^Comprehensive (analysis|review|audit|examination)/i,
+      /^Deeply (analyze|review|investigate)/i,
+      /^Conduct a (thorough|comprehensive|detailed)/i,
+      /^(Analyze|Review|Investigate|Examine) the (entire|full|complete|whole)/i
+    ];
+    if (agentTaskPatterns.some((p) => p.test(state.active_task))) {
+      state.active_task = null;
+    }
+  }
   if (!state.active_task || state.active_task === "unknown task") {
     const editedFiles = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write").map((a) => {
       const arrowIdx = a.target.indexOf(" \u2192");
@@ -3359,6 +3386,13 @@ function sanitizeCognitiveState(state) {
       if (f.includes("/../") || f.startsWith("../")) return false;
       if (/^\/?\d+\.\d+/.test(f)) return false;
       if (f === "/root/.ssh" || f.includes("/etc/cron")) return false;
+      const parts = f.split("/").filter(Boolean);
+      if (parts.length < 2 && f.startsWith("/")) return false;
+      const lastPart = parts[parts.length - 1];
+      if (lastPart && f.startsWith("/") && parts.length <= 3) {
+        if (lastPart.startsWith(".") && !lastPart.includes(".", 1)) return false;
+        if (!lastPart.includes(".")) return false;
+      }
       return true;
     });
   }
@@ -3851,6 +3885,8 @@ Output: ${truncate(toolOutput, 500)}`,
       log.info("Auto-encoded test pass completion", { passed: testRun.passed, total: testRun.total });
     } catch {
     }
+    state.session_outcomes.push(`Tests passed (${testRun.passed}/${testRun.total}) \u2192 success`);
+    if (state.session_outcomes.length > 10) state.session_outcomes = state.session_outcomes.slice(-10);
   }
   if (testRun && testRun.outcome === "fail" && state.session_files.length > 0) {
     try {
@@ -3906,6 +3942,29 @@ Output: ${truncate(toolOutput, 500)}`,
         log.info("Auto-encoded test failure", { failed: failedCount, total: testRun.total });
       }
     } catch {
+    }
+    const failedCount2 = testRun.failed ?? testRun.total - testRun.passed;
+    state.session_outcomes.push(`Tests failed (${failedCount2} failing) \u2192 fail`);
+    if (state.session_outcomes.length > 10) state.session_outcomes = state.session_outcomes.slice(-10);
+  }
+  if (!testRun && /\bgit\s+(push|commit)\b/i.test(cmd)) {
+    const gitAction = cmd.includes("push") ? "Push" : "Commit";
+    if (!isError) {
+      state.session_outcomes.push(`${gitAction} \u2192 success`);
+    } else {
+      state.session_outcomes.push(`${gitAction} \u2192 fail`);
+    }
+    if (state.session_outcomes.length > 10) state.session_outcomes = state.session_outcomes.slice(-10);
+  }
+  if (!testRun && /\b(tsup|tsc|build)\b/i.test(cmd)) {
+    const buildSuccess = /Build success|Successfully compiled/i.test(toolOutput);
+    const buildFail = isError || /error TS\d+|Build failed|compilation error/i.test(toolOutput);
+    if (buildSuccess) {
+      state.session_outcomes.push(`Build (${cmd.split(/\s+/)[1] ?? "build"}) \u2192 success`);
+      if (state.session_outcomes.length > 10) state.session_outcomes = state.session_outcomes.slice(-10);
+    } else if (buildFail) {
+      state.session_outcomes.push(`Build (${cmd.split(/\s+/)[1] ?? "build"}) \u2192 fail`);
+      if (state.session_outcomes.length > 10) state.session_outcomes = state.session_outcomes.slice(-10);
     }
   }
   if (!isError && toolOutput.length >= 100 && state.recalled_memory_ids.length > 0) {
@@ -5199,6 +5258,7 @@ function handleSessionStart(stdinJson, argFallback) {
     }
   }
   if (isPostCompact && prevState) {
+    sanitizeCognitiveState(prevState);
     try {
       const compactParts = [];
       if (prevState.recovery_context) {
@@ -5739,7 +5799,8 @@ function handleEngramUsed(stdinJson, argFallback) {
 }
 function buildContinuationBrief(state) {
   const cog = state.cognitive_state;
-  const task = state.active_task ?? cog.current_approach ?? (state.session_files.length > 0 ? `Working on ${state.session_files.slice(-3).map((f) => f.split(/[/\\]/).pop() ?? f).join(", ")}` : "unknown task");
+  const approachFirstSentence = cog.current_approach ? cog.current_approach.split(/[.!?\n]/)[0]?.trim() ?? null : null;
+  const task = state.active_task ?? (approachFirstSentence && approachFirstSentence.length >= 10 && approachFirstSentence.length <= 150 ? approachFirstSentence : null) ?? (state.session_files.length > 0 ? `Working on ${state.session_files.slice(-3).map((f) => f.split(/[/\\]/).pop() ?? f).join(", ")}` : "unknown task");
   const lastActions = state.recent_actions.slice(-8).map((a) => {
     if (a.tool === "Edit" || a.tool === "Write") {
       const shortPath = a.target.length > 60 ? "..." + a.target.slice(-57) : a.target;
@@ -6386,7 +6447,8 @@ ${distillLines}`
   } catch (e) {
     log.error("Teaching detection failed", { error: safeErrorStr(e) });
   }
-  const task = extractTask(content);
+  const isCompactionSummary = content.length > 500 && (content.includes("This session is being continued") || content.includes("Summary:") && content.includes("Key Technical Concepts") || content.includes("Previous conversation") && content.includes("compaction") || content.includes("Pre-compaction") && content.includes("continuation"));
+  const task = isCompactionSummary ? null : extractTask(content);
   const versionHint = extractVersion(content);
   if (task || versionHint) {
     if (task) state.active_task = task;
@@ -6401,14 +6463,14 @@ ${distillLines}`
       }
     }
   }
-  if (content.length >= 10 && !content.startsWith("<")) {
+  if (content.length >= 10 && !content.startsWith("<") && !isCompactionSummary) {
     state.recent_prompts.push(truncate(content, 300));
     if (state.recent_prompts.length > 8) {
       state.recent_prompts = state.recent_prompts.slice(-8);
     }
   }
   try {
-    if (content.length >= 20 && !content.startsWith("<")) {
+    if (content.length >= 20 && !content.startsWith("<") && !isCompactionSummary) {
       const approach = extractApproachFromPrompt(content);
       if (approach) {
         const currentLen = state.cognitive_state.current_approach?.length ?? 0;
