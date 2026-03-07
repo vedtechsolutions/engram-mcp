@@ -6,9 +6,9 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
-## [1.0.29] — 2026-03-07 — Bridge Quality: 7 More Gap Fixes (GAPs 21-27)
+## [1.0.30] — 2026-03-07 — 30 Gap Fixes: Full Post-Compact Recovery Pipeline
 
-### Bridge Content Quality
+### Bridge Content Quality (v1.0.29)
 - **GAP 21**: Subagent delegation prompts filtered from Active Decisions (7 delegation patterns)
 - **GAP 22**: Ternary operator fragments (`? (cog.`) detected as code in sanitizeCognitiveState
 - **GAP 23**: Noise lessons filtered — raw regex, code fragments, truncated text, CONSTANT_NAME: patterns
@@ -17,9 +17,15 @@ All notable changes to the Engram cognitive memory system.
 - **GAP 26**: `containsError()` handles camelCase identifiers (containsError, handleError), JSON stdout wrappers, and GAP commit messages. Bridge filters git log/show/diff from recent_errors
 - **GAP 27**: Directory detection extended to all depths (was only ≤3 path components)
 
+### Understanding Narrative Quality (v1.0.30)
+- **GAP 28**: `planned_next_step` with raw system tags (`<task-notification>`) filtered via `isGarbledField()`
+- **GAP 29**: Garbled decision fragments ("Chose . handleSessionStart()") detected and filtered
+- **GAP 30**: Debug metadata in active chains ("debug: 1 lines. {json}") filtered
+- New `isGarbledField()` function in compaction.ts validates all cognitive context fields before narrative assembly
+
 ### Test Coverage
-- 47 tests in continuation-brief.test.ts (was 38, +9 for GAPs 21-27)
-- 1860 total tests across 89 files
+- 51 tests in continuation-brief.test.ts (was 38, +13 for GAPs 21-30)
+- 1864 total tests across 89 files
 
 ## [1.0.28] — 2026-03-07 — Post-Compact Recovery: 20 Gap Fixes + Full Data Quality
 

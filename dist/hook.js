@@ -2270,28 +2270,40 @@ function composeUnderstandingNarrative(understanding, recovery, sessionOutcomes)
   if (sessionOutcomes && sessionOutcomes.length > 0) {
     lines.push(`Completed: ${sessionOutcomes.join("; ")}`);
   }
+  const isGarbledField = (val) => {
+    if (val.startsWith("<")) return true;
+    if (val.startsWith("Resolve: <")) return true;
+    if (/^\.\s/.test(val) || val.length < 5) return true;
+    if (/^debug:\s\d+\slines/i.test(val)) return true;
+    if (/^\{"type"/.test(val)) return true;
+    if (/^Delegated:/i.test(val)) return true;
+    if (/^Chose\s+[.\s]/.test(val)) return true;
+    if (/^Chose\s+\S{0,3}\s+because\s*$/.test(val)) return true;
+    return false;
+  };
   const cogCtx = recovery.working_state?.cognitive_context;
   if (cogCtx) {
-    if (cogCtx.current_approach) {
+    if (cogCtx.current_approach && !isGarbledField(cogCtx.current_approach)) {
       lines.push(`Approach: ${cogCtx.current_approach}`);
-    } else if (understanding.key_decisions.length > 0) {
+    } else if (understanding.key_decisions.length > 0 && !isGarbledField(understanding.key_decisions[0])) {
       lines.push(`Approach: ${understanding.key_decisions[0]}`);
     }
-    if (cogCtx.active_hypothesis) lines.push(`Hypothesis: ${cogCtx.active_hypothesis}`);
-    if (cogCtx.recent_discovery) lines.push(`Discovery: ${cogCtx.recent_discovery}`);
-    if (cogCtx.planned_next_step) lines.push(`Intent: ${cogCtx.planned_next_step}`);
-  } else if (understanding.key_decisions.length > 0) {
+    if (cogCtx.active_hypothesis && !isGarbledField(cogCtx.active_hypothesis)) lines.push(`Hypothesis: ${cogCtx.active_hypothesis}`);
+    if (cogCtx.recent_discovery && !isGarbledField(cogCtx.recent_discovery)) lines.push(`Discovery: ${cogCtx.recent_discovery}`);
+    if (cogCtx.planned_next_step && !isGarbledField(cogCtx.planned_next_step)) lines.push(`Intent: ${cogCtx.planned_next_step}`);
+  } else if (understanding.key_decisions.length > 0 && !isGarbledField(understanding.key_decisions[0])) {
     lines.push(`Approach: ${understanding.key_decisions[0]}`);
   }
-  const extraDecisions = cogCtx?.current_approach ? understanding.key_decisions : understanding.key_decisions.slice(1);
+  const extraDecisions = (cogCtx?.current_approach ? understanding.key_decisions : understanding.key_decisions.slice(1)).filter((d) => !isGarbledField(d) && d.length >= 10);
   if (extraDecisions.length > 0) {
     lines.push(`Also decided: ${extraDecisions.join("; ")}`);
   }
   if (understanding.architecture_delta && understanding.architecture_delta !== cogCtx?.recent_discovery) {
     lines.push(`Discovered: ${understanding.architecture_delta}`);
   }
-  if (understanding.active_chains.length > 0) {
-    lines.push(`Investigating: ${understanding.active_chains.join("; ")}`);
+  const cleanChains = understanding.active_chains.filter((c) => !isGarbledField(c) && c.length >= 10);
+  if (cleanChains.length > 0) {
+    lines.push(`Investigating: ${cleanChains.join("; ")}`);
   }
   if (recovery.reasoning_trail && recovery.reasoning_trail.length > 0) {
     lines.push(`Reasoning trail: ${recovery.reasoning_trail.slice(0, 5).join("; ")}`);
