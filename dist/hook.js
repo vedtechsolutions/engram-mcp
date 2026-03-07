@@ -3338,6 +3338,17 @@ function sanitizeCognitiveState(state) {
         state.active_task = `Working on ${uniqueFiles.join(", ")}`;
       }
     }
+    if (!state.active_task && state.recent_prompts && state.recent_prompts.length > 0) {
+      const taskVerbs = /^(fix|add|create|update|implement|remove|refactor|build|change|move|write|make|set|run|deploy|test|commit|push|install|configure|debug|solve|enable|disable|start|stop|check|verify|analyze|review|audit|optimize|clean|delete|migrate|upgrade|publish|get|do|finish)/i;
+      for (let i = state.recent_prompts.length - 1; i >= 0; i--) {
+        const prompt = state.recent_prompts[i];
+        const first = prompt.split(/[.!?\n]/)[0]?.trim();
+        if (first && first.length >= 15 && first.length <= 200 && taskVerbs.test(first)) {
+          state.active_task = first;
+          break;
+        }
+      }
+    }
   }
   if (state.session_files.length > 0) {
     state.session_files = state.session_files.filter((f) => {
@@ -6394,7 +6405,7 @@ ${distillLines}`
       }
       if (content.length >= 30 && content.length <= 500 && !content.startsWith("<")) {
         const firstSentence = content.split(/[.!?\n]/)[0]?.trim();
-        const isTaskLike = firstSentence && /^(fix|add|create|update|implement|remove|refactor|build|change|move|write|make|set|run|deploy|test|commit|push|install|configure|debug|solve|close|merge|release)/i.test(firstSentence);
+        const isTaskLike = firstSentence && /^(fix|add|create|update|implement|remove|refactor|build|change|move|write|make|set|run|deploy|test|commit|push|install|configure|debug|solve|close|merge|release|enable|disable|start|stop|check|verify|analyze|review|audit|optimize|clean|delete|migrate|upgrade|publish|get|do|finish)/i.test(firstSentence);
         if (isTaskLike && firstSentence.length >= 15 && firstSentence.length <= 200) {
           state.active_task = firstSentence;
         }

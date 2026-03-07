@@ -6,6 +6,35 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
+## [1.0.21] — 2026-03-07 — Post-Compact Recovery: 10 Gap Fixes + Security Hardening
+
+### Security Hardening (v1.0.20)
+- **CRIT-1**: `validateTranscriptPath()` prevents path traversal on transcript reads
+- **CRIT-2**: 10MB stdin cap in `readStdin()` prevents memory exhaustion
+- **HIGH-1**: `CLAUDE_MEMORY_DIR` validation in curator.ts (no null bytes, no traversal)
+- **HIGH-2**: `validateCwd()` with null byte + length guard
+- **HIGH-3**: Remove all 4 `notification-debug.log` file writes
+- **MED-1**: 64KB cap on session handoff file size
+- **MED-3**: `validateSessionId()` with alphanumeric regex
+- **LOW-2**: Publish script input validation for version argument
+
+### Post-Compact Recovery Gaps Fixed (v1.0.21)
+- **GAP 1**: Conversational remarks no longer become active_task (pattern filter)
+- **GAP 2**: Truncated discovery fragments cleared (< 40 chars starting with "that")
+- **GAP 4**: Subagent reports/audits no longer recorded as errors
+- **GAP 5**: session_files validated — rejects bare names, version numbers, traversal paths
+- **GAP 6**: key_files strips " → content" suffix from Edit targets
+- **GAP 7**: Decisions filter out subagent delegations
+- **GAP 8**: handlePostCompact rebuilds continuation brief fresh with sanitized state
+- **GAP 10**: Multi-word template patterns caught by regex ("X. Hypothesis: Y. Discovery: Z")
+
+### Improvements
+- Expanded task verb recognition (18 new verbs: enable, disable, audit, analyze, etc.)
+- Last-resort task inference from recent_prompts when no edit files exist
+- 1831 tests across 89 files (7 new continuation-brief tests)
+
+---
+
 ## [1.0.16] — 2026-03-06 — Continuation Gap Closed (Ralph Loop)
 
 7 iterations fixing post-compact and cross-session continuation quality.
