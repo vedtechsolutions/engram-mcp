@@ -6472,6 +6472,7 @@ ${distillLines}`
             if (m.memory.tags.includes("pre-compact")) continue;
             if (m.memory.tags.includes("session-narrative")) continue;
             if (m.memory.tags.includes("milestone") || m.memory.content.startsWith("Session milestone")) continue;
+            if (state.active_project && m.memory.encoding_context?.project && m.memory.encoding_context.project !== state.active_project && (m.memory.type === "episodic" || m.memory.type === "semantic" && m.memory.domains.length > 0)) continue;
             const isFailure = m.memory.type === "episodic" && isEpisodicData(m.memory.type_data) && m.memory.type_data.outcome === "negative";
             const prefix = m.somatic_marker ? "[ENGRAM GUT]" : isFailure ? "[ENGRAM CAUTION]" : "[ENGRAM CONTEXT]";
             const outcomeHint = m.memory.type === "episodic" && (m.somatic_marker || isFailure) ? getEpisodicOutcomeHint(m.memory) : "";
