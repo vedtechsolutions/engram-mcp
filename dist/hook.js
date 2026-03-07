@@ -3313,18 +3313,19 @@ function writeSessionHandoff(state, narrative) {
     const queries = state.search_queries.slice(-5);
     reasoningTrail.push(`Investigated: ${queries.join(" \u2192 ")}`);
   }
+  const brief = state.continuation_brief ?? buildContinuationBrief(state);
   const handoff = {
     ended_at: (/* @__PURE__ */ new Date()).toISOString(),
     project: state.active_project,
     domain: state.active_domain,
-    task: state.active_task,
+    task: brief.task !== "unknown task" ? brief.task : state.active_task,
     approach: (state.cognitive_state.current_approach ?? narrative?.approach ?? null)?.substring(0, SESSION_HANDOFF.MAX_APPROACH_LENGTH) ?? null,
     hypothesis: state.cognitive_state.active_hypothesis?.substring(0, SESSION_HANDOFF.MAX_APPROACH_LENGTH) ?? null,
     discoveries: state.cognitive_state.recent_discovery ? [state.cognitive_state.recent_discovery.substring(0, SESSION_HANDOFF.MAX_LESSON_LENGTH)] : [],
-    decisions,
-    unfinished: narrative?.unfinished && narrative.unfinished.length > 0 ? narrative.unfinished.join("; ").substring(0, SESSION_HANDOFF.MAX_UNFINISHED_LENGTH) : null,
+    decisions: decisions.length > 0 ? decisions : brief.decisions,
+    unfinished: narrative?.unfinished && narrative.unfinished.length > 0 ? narrative.unfinished.join("; ").substring(0, SESSION_HANDOFF.MAX_UNFINISHED_LENGTH) : brief.next_steps.length > 0 ? brief.next_steps.join("; ").substring(0, SESSION_HANDOFF.MAX_UNFINISHED_LENGTH) : null,
     blockers: state.recent_errors.slice(0, SESSION_HANDOFF.MAX_BLOCKERS).map((e) => e.substring(0, 200)),
-    files: state.session_files.slice(-SESSION_HANDOFF.MAX_FILES).map((f) => f.split(/[/\\]/).pop() ?? f),
+    files: brief.key_files.length > 0 ? brief.key_files.slice(-SESSION_HANDOFF.MAX_FILES) : state.session_files.slice(-SESSION_HANDOFF.MAX_FILES).map((f) => f.split(/[/\\]/).pop() ?? f),
     lessons,
     phase: state.cognitive_state.session_phase ?? null,
     turns: state.total_turns,
