@@ -3250,13 +3250,29 @@ function sanitizeCognitiveState(state) {
   const cog = state.cognitive_state;
   if (!cog) return;
   const placeholders = ["X", "X.", "Y", "Y.", "Z", "Z."];
-  if (cog.current_approach && placeholders.includes(cog.current_approach)) {
+  const templatePatterns = [
+    /^X[\.\s]/,
+    // Starts with X. or X<space>
+    /^Approach:\s*X/i,
+    // "Approach: X..."
+    /Hypothesis:\s*[XYZ][\.\s]/,
+    // Contains "Hypothesis: X."
+    /Discovery:\s*[XYZ][\.\s]/,
+    // Contains "Discovery: Z."
+    /^[XYZ]\.\s+(?:Hypothesis|Discovery|Approach):/i
+    // "X. Hypothesis: Y..."
+  ];
+  const isPlaceholderValue = (val) => {
+    if (placeholders.includes(val)) return true;
+    return templatePatterns.some((p) => p.test(val));
+  };
+  if (cog.current_approach && isPlaceholderValue(cog.current_approach)) {
     cog.current_approach = null;
   }
-  if (cog.active_hypothesis && placeholders.includes(cog.active_hypothesis)) {
+  if (cog.active_hypothesis && isPlaceholderValue(cog.active_hypothesis)) {
     cog.active_hypothesis = null;
   }
-  if (cog.recent_discovery && placeholders.includes(cog.recent_discovery)) {
+  if (cog.recent_discovery && isPlaceholderValue(cog.recent_discovery)) {
     cog.recent_discovery = null;
   }
   if (cog.active_hypothesis && cog.active_hypothesis.startsWith("/")) {
@@ -3285,11 +3301,35 @@ function sanitizeCognitiveState(state) {
       }
     }
   }
+  if (cog.recent_discovery && cog.recent_discovery.length < 15 && !cog.recent_discovery.includes(" ")) {
+    cog.recent_discovery = null;
+  }
+  if (cog.recent_discovery && /^that\s/i.test(cog.recent_discovery) && cog.recent_discovery.length < 40) {
+    cog.recent_discovery = null;
+  }
   if (state.active_task && state.active_task.startsWith("<")) {
     state.active_task = null;
   }
+  if (state.active_task) {
+    const conversationalPatterns = [
+      /^i have another/i,
+      /^just letting you/i,
+      /^just a quick/i,
+      /^now tell me/i,
+      /^do another final/i,
+      /^reviewing$/i
+      // Generic tool-inferred task, not specific
+    ];
+    if (conversationalPatterns.some((p) => p.test(state.active_task))) {
+      state.active_task = null;
+    }
+  }
   if (!state.active_task || state.active_task === "unknown task") {
-    const editedFiles = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write").map((a) => a.target.split(/[/\\]/).pop() ?? a.target);
+    const editedFiles = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write").map((a) => {
+      const arrowIdx = a.target.indexOf(" \u2192");
+      const path = arrowIdx > 0 ? a.target.slice(0, arrowIdx) : a.target;
+      return path.split(/[/\\]/).pop() ?? path;
+    });
     const uniqueFiles = [...new Set(editedFiles)].slice(-5);
     if (uniqueFiles.length > 0) {
       if (cog.current_approach && cog.current_approach.length >= 10) {
@@ -3298,6 +3338,16 @@ function sanitizeCognitiveState(state) {
         state.active_task = `Working on ${uniqueFiles.join(", ")}`;
       }
     }
+  }
+  if (state.session_files.length > 0) {
+    state.session_files = state.session_files.filter((f) => {
+      if (f.length < 3 || f.length > 500) return false;
+      if (!f.includes("/") && !f.includes("\\")) return false;
+      if (f.includes("/../") || f.startsWith("../")) return false;
+      if (/^\/?\d+\.\d+/.test(f)) return false;
+      if (f === "/root/.ssh" || f.includes("/etc/cron")) return false;
+      return true;
+    });
   }
 }
 function deleteSessionState() {
@@ -5449,6 +5499,9 @@ function handleSubagentStop(stdinJson) {
   const fileMatches = lastMessage.match(/(?:\/[\w./+-]+\.\w+|[\w./+-]+\.(?:ts|js|py|xml|json|css|scss|md))/g);
   if (fileMatches) {
     for (const f of fileMatches) {
+      if (!f.includes("/")) continue;
+      if (f.includes("/../") || f.startsWith("../") || /^\/?\d+\.\d+/.test(f)) continue;
+      if (f === "/root/.ssh" || f.includes("/etc/cron")) continue;
       if (!state.session_files.includes(f)) {
         state.session_files.push(f);
       }
@@ -5457,7 +5510,7 @@ function handleSubagentStop(stdinJson) {
       state.session_files = state.session_files.slice(-50);
     }
   }
-  const isMetaAnalysis = lastMessage.startsWith("<analysis>") || lastMessage.startsWith("<summary>") || /^#+\s/.test(lastMessage) || lastMessage.startsWith("Based on ");
+  const isMetaAnalysis = lastMessage.startsWith("<analysis>") || lastMessage.startsWith("<summary>") || /^#+\s/.test(lastMessage) || lastMessage.startsWith("Based on ") || /^(I now have|Perfect!|I have (sufficient|enough|comprehensive))/i.test(lastMessage) || /^(Here('s| is) (the|my|a) (comprehensive|complete|detailed|full))/i.test(lastMessage) || lastMessage.includes("## ") && lastMessage.length > 500;
   const hasError = !isMetaAnalysis && containsError(lastMessage);
   if (hasError) {
     state.recent_errors.push(truncate(lastMessage, 200));
@@ -5696,13 +5749,20 @@ function buildContinuationBrief(state) {
   for (const id of state.decision_memory_ids.slice(-5)) {
     try {
       const mem = getMemory(id);
-      if (mem) decisions.push(truncate(mem.content, 150));
+      if (mem) {
+        const content = mem.content;
+        if (/^Delegated:|^Decision:\s*Delegated/i.test(content)) continue;
+        decisions.push(truncate(content, 150));
+      }
     } catch {
     }
   }
   const triedFailed = (state.session_outcomes ?? []).filter((o) => o.includes("\u2192 fail") || o.includes("\u2192 dead end") || o.includes("\u2192 blocked")).slice(-5).map((o) => truncate(o, 120));
   const editActions = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write");
-  const keyFiles = [...new Set(editActions.map((a) => a.target))].slice(-10);
+  const keyFiles = [...new Set(editActions.map((a) => {
+    const arrowIdx = a.target.indexOf(" \u2192");
+    return arrowIdx > 0 ? a.target.slice(0, arrowIdx) : a.target;
+  }))].slice(-10);
   const recentBash = state.recent_commands?.slice(-5) ?? [];
   if (recentBash.length > 0) {
     const bashSummary = recentBash.map((c) => truncate(c.cmd, 80));
@@ -7131,10 +7191,14 @@ function handlePostCompact(stdinJson) {
     if (!recovery) return;
     const budget = new OutputBudget(OUTPUT_BUDGET.POST_COMPACT_MAX_BYTES);
     const lines = [];
-    const brief = state.continuation_brief;
-    if (brief) {
+    sanitizeCognitiveState(state);
+    const brief = buildContinuationBrief(state);
+    const briefUsable = brief.task !== "unknown task" || brief.last_actions.length > 0;
+    if (briefUsable) {
       const mindLines = ["[Engram] Continue from where you left off:"];
-      mindLines.push(`  Task: ${brief.task}`);
+      if (brief.task !== "unknown task") {
+        mindLines.push(`  Task: ${brief.task}`);
+      }
       mindLines.push(`  Phase: ${brief.phase}`);
       if (brief.last_actions.length > 0) {
         mindLines.push(`  Last actions:`);
