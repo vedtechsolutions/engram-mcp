@@ -3250,6 +3250,9 @@ function sanitizeCognitiveState(state) {
   if (cog.recent_discovery && cog.recent_discovery.startsWith("Pre-compaction")) {
     cog.recent_discovery = null;
   }
+  if (state.active_task && state.active_task.startsWith("<")) {
+    state.active_task = null;
+  }
   if (!state.active_task || state.active_task === "unknown task") {
     const editedFiles = state.recent_actions.filter((a) => a.tool === "Edit" || a.tool === "Write").map((a) => a.target.split(/[/\\]/).pop() ?? a.target);
     const uniqueFiles = [...new Set(editedFiles)].slice(-5);
@@ -6298,14 +6301,14 @@ ${distillLines}`
       }
     }
   }
-  if (content.length >= 10) {
+  if (content.length >= 10 && !content.startsWith("<")) {
     state.recent_prompts.push(truncate(content, 300));
     if (state.recent_prompts.length > 8) {
       state.recent_prompts = state.recent_prompts.slice(-8);
     }
   }
   try {
-    if (content.length >= 20) {
+    if (content.length >= 20 && !content.startsWith("<")) {
       const approach = extractApproachFromPrompt(content);
       if (approach) {
         const currentLen = state.cognitive_state.current_approach?.length ?? 0;
@@ -6318,9 +6321,9 @@ ${distillLines}`
           );
         }
       }
-      if (content.length >= 30 && content.length <= 500) {
+      if (content.length >= 30 && content.length <= 500 && !content.startsWith("<")) {
         const firstSentence = content.split(/[.!?\n]/)[0]?.trim();
-        if (firstSentence && firstSentence.length >= 15 && firstSentence.length <= 200) {
+        if (firstSentence && firstSentence.length >= 15 && firstSentence.length <= 200 && !firstSentence.startsWith("<")) {
           state.active_task = firstSentence;
         }
       }
