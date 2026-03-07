@@ -3331,15 +3331,8 @@ function sanitizeCognitiveState(state) {
       return path.split(/[/\\]/).pop() ?? path;
     });
     const uniqueFiles = [...new Set(editedFiles)].slice(-5);
-    if (uniqueFiles.length > 0) {
-      if (cog.current_approach && cog.current_approach.length >= 10) {
-        state.active_task = cog.current_approach.slice(0, 150);
-      } else {
-        state.active_task = `Working on ${uniqueFiles.join(", ")}`;
-      }
-    }
-    if (!state.active_task && state.recent_prompts && state.recent_prompts.length > 0) {
-      const taskVerbs = /^(fix|add|create|update|implement|remove|refactor|build|change|move|write|make|set|run|deploy|test|commit|push|install|configure|debug|solve|enable|disable|start|stop|check|verify|analyze|review|audit|optimize|clean|delete|migrate|upgrade|publish|get|do|finish)/i;
+    const taskVerbs = /^(fix|add|create|update|implement|remove|refactor|build|change|move|write|make|set|run|deploy|test|commit|push|install|configure|debug|solve|enable|disable|start|stop|check|verify|analyze|review|audit|optimize|clean|delete|migrate|upgrade|publish|get|do|finish)/i;
+    if (state.recent_prompts && state.recent_prompts.length > 0) {
       for (let i = state.recent_prompts.length - 1; i >= 0; i--) {
         const prompt = state.recent_prompts[i];
         const first = prompt.split(/[.!?\n]/)[0]?.trim();
@@ -3348,6 +3341,15 @@ function sanitizeCognitiveState(state) {
           break;
         }
       }
+    }
+    if (!state.active_task && cog.current_approach && cog.current_approach.length >= 10) {
+      const firstSentence = cog.current_approach.split(/[.!?\n]/)[0]?.trim();
+      if (firstSentence && firstSentence.length >= 10 && firstSentence.length <= 150) {
+        state.active_task = firstSentence;
+      }
+    }
+    if (!state.active_task && uniqueFiles.length > 0) {
+      state.active_task = `Working on ${uniqueFiles.join(", ")}`;
     }
   }
   if (state.session_files.length > 0) {
@@ -3768,6 +3770,12 @@ Output: ${truncate(toolOutput, 500)}`,
   if (state.recent_tool_names.length > 10) {
     state.recent_tool_names = state.recent_tool_names.slice(-10);
   }
+  state.cognitive_state = updateCognitiveState(
+    state.cognitive_state,
+    { type: "tool_call", toolName: "Bash", inputSummary: truncate(cmd, 100) },
+    state.recent_tool_names,
+    state.recent_errors
+  );
   state.recent_actions.push({
     tool: "Bash",
     target: truncate(cmd, 120),
@@ -4259,6 +4267,16 @@ function handlePostWrite(toolInput, argFallback) {
   const filePath = input?.file_path ?? input?.path ?? "";
   if (!filePath) return;
   const state = loadWatcherState();
+  state.recent_tool_names.push("Edit");
+  if (state.recent_tool_names.length > 10) {
+    state.recent_tool_names = state.recent_tool_names.slice(-10);
+  }
+  state.cognitive_state = updateCognitiveState(
+    state.cognitive_state,
+    { type: "tool_call", toolName: "Edit", inputSummary: filePath },
+    state.recent_tool_names,
+    state.recent_errors
+  );
   {
     const newStr = input?.new_string ?? "";
     const firstNewLine = newStr.split("\n").find((l) => l.trim().length > 0) ?? "";
