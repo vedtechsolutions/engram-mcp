@@ -6,6 +6,28 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
+## [1.0.26] — 2026-03-07 — Post-Compact Recovery: 19 Gap Fixes + Full Data Quality
+
+### Phase Detection & Task Inference (v1.0.23)
+- **GAP 9**: Edit/Write tools now push to recent_tool_names and call updateCognitiveState
+- **GAP 14**: Phase detection tracks all tool types (was only Read/Grep/Glob/Agent)
+- Task inference 3-level priority: user prompts > approach first sentence > file-based fallback
+- Expanded task verb regex: 18 new verbs (close, merge, release, etc.)
+
+### Data Quality (v1.0.25)
+- **GAP 11**: Code fragment detection in cognitive fields (&&, ||, const, if, property chains)
+- **GAP 12**: Markdown/summary artifact detection (**bold**, bullet lists, numbered lists)
+- **GAP 13**: Truncated paths and directories filtered from session_files
+- **GAP 15**: Agent-style verbose prompts cleared from active_task (7 patterns)
+- **GAP 16**: Compaction summaries excluded from task/prompt/approach capture
+- **GAP 17**: Auto session outcomes from test/build/git pass/fail (tried_failed now populated)
+- **GAP 18**: Sanitize prevState in handleSessionStart before injection
+- **GAP 19**: Sanitize state in handlePreCompact before building recovery context
+
+### Test Coverage
+- 31 tests in continuation-brief.test.ts covering all gap patterns
+- 1844 total tests across 89 files
+
 ## [1.0.21] — 2026-03-07 — Post-Compact Recovery: 10 Gap Fixes + Security Hardening
 
 ### Security Hardening (v1.0.20)
