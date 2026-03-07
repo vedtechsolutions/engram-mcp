@@ -6,6 +6,26 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
+## [1.0.13] — 2026-03-06 — Continuation Gap Closed
+
+### New Features
+- **User prompt tracking** — last 8 user prompts tracked in WatcherState, included in ContinuationBrief as `user_requests`, injected in post-compact as "User asked:"
+- **Edit content hints** — `summarizeToolInput` for Edit now captures `file_path → first_new_line`, so continuation shows exactly what was changed
+- **Session handoff uses ContinuationBrief** — task, decisions, next steps, and key files now come from the enriched brief instead of raw cognitive fields
+
+### Improvements
+- **handlePostWrite richer actions** — captures file path + first line of new content in `recent_actions` instead of bare file path
+- **Handoff unfinished** — populated from `brief.next_steps` when narrative unfinished is empty
+- **Handoff key_files** — uses `brief.key_files` (full paths) instead of truncated session_files
+
+---
+
+## [1.0.12] — 2026-03-06 — User Prompt + Content Tracking
+
+Internal release folded into 1.0.13.
+
+---
+
 ## [1.0.11] — 2026-03-06 — Post-Compact Continuation Fix
 
 ### Bug Fixes

@@ -6305,15 +6305,24 @@ ${distillLines}`
     }
   }
   try {
-    if (content.length >= 20 && !state.cognitive_state.current_approach) {
+    if (content.length >= 20) {
       const approach = extractApproachFromPrompt(content);
       if (approach) {
-        state.cognitive_state = updateCognitiveState(
-          state.cognitive_state,
-          { type: "agent_prompt", prompt: content },
-          state.recent_tool_names,
-          state.recent_errors
-        );
+        const currentLen = state.cognitive_state.current_approach?.length ?? 0;
+        if (!state.cognitive_state.current_approach || approach.length > currentLen * 1.5) {
+          state.cognitive_state = updateCognitiveState(
+            state.cognitive_state,
+            { type: "agent_prompt", prompt: content },
+            state.recent_tool_names,
+            state.recent_errors
+          );
+        }
+      }
+      if (content.length >= 30 && content.length <= 500) {
+        const firstSentence = content.split(/[.!?\n]/)[0]?.trim();
+        if (firstSentence && firstSentence.length >= 15 && firstSentence.length <= 200) {
+          state.active_task = firstSentence;
+        }
       }
     }
   } catch {
