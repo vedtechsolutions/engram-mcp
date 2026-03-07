@@ -3141,7 +3141,8 @@ function loadWatcherState() {
         recent_commands: raw.recent_commands ?? [],
         procedural_encoded_count: raw.procedural_encoded_count ?? 0,
         recent_actions: raw.recent_actions ?? [],
-        continuation_brief: raw.continuation_brief ?? null
+        continuation_brief: raw.continuation_brief ?? null,
+        recent_prompts: raw.recent_prompts ?? []
       };
     }
   } catch {
@@ -3207,7 +3208,8 @@ function loadWatcherState() {
     recent_commands: [],
     procedural_encoded_count: 0,
     recent_actions: [],
-    continuation_brief: null
+    continuation_brief: null,
+    recent_prompts: []
   };
 }
 function saveWatcherState(state) {
@@ -4176,13 +4178,18 @@ function handlePostWrite(toolInput, argFallback) {
   const filePath = input?.file_path ?? input?.path ?? "";
   if (!filePath) return;
   const state = loadWatcherState();
-  state.recent_actions.push({
-    tool: "Edit",
-    target: filePath,
-    time: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  if (state.recent_actions.length > 15) {
-    state.recent_actions = state.recent_actions.slice(-15);
+  {
+    const newStr = input?.new_string ?? "";
+    const firstNewLine = newStr.split("\n").find((l) => l.trim().length > 0) ?? "";
+    const actionTarget = firstNewLine ? `${filePath} \u2192 ${firstNewLine}`.slice(0, 250) : filePath;
+    state.recent_actions.push({
+      tool: "Edit",
+      target: actionTarget,
+      time: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    if (state.recent_actions.length > 15) {
+      state.recent_actions = state.recent_actions.slice(-15);
+    }
   }
   if (typeof filePath === "string" && !state.session_files.includes(filePath)) {
     state.session_files.push(filePath);
@@ -4706,6 +4713,14 @@ function summarizeToolInput(tool, input) {
         `pattern=${input.pattern ?? ""} path=${input.path ?? ""}`,
         200
       );
+    case "Edit": {
+      const filePath = input.file_path ?? "";
+      const newStr = input.new_string ?? "";
+      const firstNewLine = newStr.split("\n").find((l) => l.trim().length > 0) ?? "";
+      return truncate(`${filePath} \u2192 ${firstNewLine}`, 250);
+    }
+    case "Write":
+      return truncate(input.file_path ?? "", 200);
     case "Agent":
       return truncate(input.prompt ?? "", 300);
     case "WebSearch":
@@ -5025,7 +5040,8 @@ function handleSessionStart(stdinJson, argFallback) {
     recent_commands: isPostCompact ? prevState?.recent_commands ?? [] : [],
     procedural_encoded_count: isPostCompact ? prevState?.procedural_encoded_count ?? 0 : 0,
     recent_actions: isPostCompact ? prevState?.recent_actions ?? [] : [],
-    continuation_brief: isPostCompact ? prevState?.continuation_brief ?? null : null
+    continuation_brief: isPostCompact ? prevState?.continuation_brief ?? null : null,
+    recent_prompts: isPostCompact ? prevState?.recent_prompts ?? [] : []
   });
   const source = metadata.source;
   if (!source || source === "startup") {
@@ -5690,7 +5706,8 @@ function buildContinuationBrief(state) {
     decisions,
     tried_failed: triedFailed,
     key_files: keyFiles.length > 0 ? keyFiles : state.session_files.slice(-10),
-    blockers: state.recent_errors.slice(-3).map((e) => truncate(e, 150))
+    blockers: state.recent_errors.slice(-3).map((e) => truncate(e, 150)),
+    user_requests: state.recent_prompts.slice(-5).map((p) => truncate(p, 200))
   };
 }
 function handlePreCompact() {
@@ -6278,6 +6295,12 @@ ${distillLines}`
         findOrCreateTask(task, process.cwd(), state.active_domain, sessionId);
       } catch {
       }
+    }
+  }
+  if (content.length >= 10) {
+    state.recent_prompts.push(truncate(content, 300));
+    if (state.recent_prompts.length > 8) {
+      state.recent_prompts = state.recent_prompts.slice(-8);
     }
   }
   try {
@@ -7109,6 +7132,10 @@ function handlePostCompact(stdinJson) {
       if (brief.key_files.length > 0) {
         const files = brief.key_files.map((f) => f.split(/[/\\]/).pop() ?? f);
         mindLines.push(`  Files: ${files.join(", ")}`);
+      }
+      if (brief.user_requests && brief.user_requests.length > 0) {
+        mindLines.push(`  User asked:`);
+        for (const req of brief.user_requests.slice(-3)) mindLines.push(`    - ${req}`);
       }
       lines.push(mindLines.join("\n"));
     } else {
