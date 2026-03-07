@@ -5976,6 +5976,7 @@ function handlePromptCheck(stdinJson, argFallback) {
   if (!rawContent || typeof rawContent !== "string" || rawContent.length < 3) return;
   const content = rawContent.length > INPUT.MAX_CONTENT_LENGTH ? rawContent.slice(0, INPUT.MAX_CONTENT_LENGTH) : rawContent;
   const state = loadWatcherState();
+  sanitizeCognitiveState(state);
   const budget = new OutputBudget();
   if (!state.active_project) {
     const inferred = inferProjectFromCwd();
