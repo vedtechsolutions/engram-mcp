@@ -5876,6 +5876,7 @@ function buildContinuationBrief(state) {
 }
 function handlePreCompact() {
   const state = loadWatcherState();
+  sanitizeCognitiveState(state);
   if (!state.active_project) {
     const inferred = inferProjectFromCwd();
     if (inferred) state.active_project = inferred;
