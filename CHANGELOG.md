@@ -6,6 +6,28 @@ All notable changes to the Engram cognitive memory system.
 
 > **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
 
+## [1.0.16] — 2026-03-06 — Continuation Gap Closed (Ralph Loop)
+
+7 iterations fixing post-compact and cross-session continuation quality.
+
+### Bug Fixes
+- **XML system tag filtering** — `<task-notification>`, `<system-reminder>` tags no longer leak into cognitive state, prompt tracking, or active_task
+- **Cross-project memory bleed** — project isolation filter added to contextual recall injection (step 3a), was only in proactive recall (3z)
+
+### New Features
+- **User prompt tracking** — last 8 user prompts tracked, included in ContinuationBrief as `user_requests`, injected post-compact as "User asked:"
+- **Edit content hints** — `summarizeToolInput` for Edit captures `file_path → first_new_line`, handlePostWrite includes content hint in actions
+- **Session handoff uses ContinuationBrief** — task, decisions, next steps, key files from enriched brief
+- **Aggressive task/approach extraction** — user prompts override stale approaches, short focused messages become active_task
+
+### Improvements
+- **Placeholder cleanup at save time** — `sanitizeCognitiveState()` runs on every `saveWatcherState()`, pre-compact snapshots never contain X/Y/Z garbage
+- **Task-targeted post-compact recall** — uses continuation brief's task + key files, not vague cognitive fields
+- **Session-narrative/milestone noise filtered** — from both contextual (3a) and proactive (3z) recall
+- **Enriched ContinuationBrief** — full paths, bash context, discovery-driven next steps, hypothesis tracking, unfinished from next_steps
+
+---
+
 ## [1.0.13] — 2026-03-06 — Continuation Gap Closed
 
 ### New Features

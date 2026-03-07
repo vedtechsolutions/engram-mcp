@@ -6323,7 +6323,8 @@ ${distillLines}`
       }
       if (content.length >= 30 && content.length <= 500 && !content.startsWith("<")) {
         const firstSentence = content.split(/[.!?\n]/)[0]?.trim();
-        if (firstSentence && firstSentence.length >= 15 && firstSentence.length <= 200 && !firstSentence.startsWith("<")) {
+        const isTaskLike = firstSentence && /^(fix|add|create|update|implement|remove|refactor|build|change|move|write|make|set|run|deploy|test|commit|push|install|configure|debug|solve|close|merge|release)/i.test(firstSentence);
+        if (isTaskLike && firstSentence.length >= 15 && firstSentence.length <= 200) {
           state.active_task = firstSentence;
         }
       }
