@@ -3244,11 +3244,22 @@ function sanitizeCognitiveState(state) {
   if (cog.current_approach && cog.current_approach.length < 5) {
     cog.current_approach = null;
   }
-  if (cog.current_approach && cog.current_approach.startsWith("Pre-compaction")) {
-    cog.current_approach = null;
+  const templatePrefixes = ["Pre-compaction", "chronologically analyze", "This session is being continued"];
+  if (cog.current_approach) {
+    for (const prefix of templatePrefixes) {
+      if (cog.current_approach.startsWith(prefix)) {
+        cog.current_approach = null;
+        break;
+      }
+    }
   }
-  if (cog.recent_discovery && cog.recent_discovery.startsWith("Pre-compaction")) {
-    cog.recent_discovery = null;
+  if (cog.recent_discovery) {
+    for (const prefix of templatePrefixes) {
+      if (cog.recent_discovery.startsWith(prefix)) {
+        cog.recent_discovery = null;
+        break;
+      }
+    }
   }
   if (state.active_task && state.active_task.startsWith("<")) {
     state.active_task = null;
