@@ -4,6 +4,63 @@ All notable changes to the Engram cognitive memory system.
 
 ---
 
+> **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
+
+## [1.0.9] — 2026-03-06 — Session Narrative Fix
+
+### Bug Fix
+- **Tag mismatch** — session-narrative memories were created with hyphen (`session-narrative`) but filtered with underscore (`session_narrative`), causing narratives to leak into recall and never match session filters. Fixed all filter locations to use consistent hyphenated tag.
+
+---
+
+## [1.0.8] — 2026-03-06 — Live Injection Fixes
+
+### Bug Fixes
+- **Stale task inference** — `active_task` now auto-inferred from recent Edit/Write actions when no explicit task is set, instead of staying stuck on old values
+- **Placeholder cognitive state** — cleaned up literal `"X"`, `"Y"`, `"Z"` values and file-path hypotheses that leaked from compaction template strings into CognitiveState
+- **Stuck antipattern** — added staleness penalty in `contextualBoost()` for memories with high access count but low reinforcement ratio (`STALE_ACCESS_THRESHOLD: 15`, `STALE_RATIO_THRESHOLD: 8.0`)
+- **Wrong phase detection** — debugging phase now requires both recent errors AND recent Bash activity, not just stale errors in buffer
+
+---
+
+## [1.0.7] — 2026-03-06 — Actionable Post-Compact Recovery
+
+### New Features
+- **ContinuationBrief** — structured post-compact recovery replacing vague cognitive state with specific task, last actions, next steps, decisions, tried-and-failed, key files, and blockers
+- **`recent_actions` tracking** — WatcherState buffer of `{tool, target, time}` from Edit/Bash/Write calls, used for task inference and continuation
+- **Surface-context dedup** — `surfacedIds` Set prevents same memory appearing in both `[ENGRAM SURFACE]` and `[ENGRAM CONTEXT]` sections
+
+### Improvements
+- **Session narrative quality** — `extractGoal()` skips vague comma-separated keyword lists, prefers file-based descriptions
+- **`buildContinuationBrief()`** — infers next steps from cognitive state and recent tool patterns, serializes decisions from decision_memory_ids
+
+---
+
+## [1.0.6] — 2026-03-06 — Procedural Auto-Encoding
+
+### New Features
+- **Procedural workflow detection** — automatically encodes recurring bash command sequences (build, test, deploy, git, docker, lint, db, install) as procedural memories
+- **8 workflow categories** with pattern matching: `build`, `test`, `deploy`, `install`, `lint`, `db`, `docker`, `git`
+- **`recent_commands` tracking** in WatcherState (last 20 commands)
+- **Per-session limits** — max 5 procedural encodings per session with 2-minute cooldown
+
+### Constants
+- `PROCEDURAL_WORKFLOW` block: `MIN_COMMANDS: 3`, `MAX_PER_SESSION: 5`, `MIN_CONFIDENCE: 0.65`
+
+### Tests
+- 11 new tests in `tests/procedural-workflow.test.ts`
+
+---
+
+## [1.0.5] — 2026-03-06 — Module-Scoped Pre-Write & Signal Quality
+
+### Improvements
+- **Module-scoped pre-write recall** — code context recall filtered by file's framework/module, so Odoo patterns don't inject when editing TypeScript
+- **Signal quality fixes** — proficiency tracking, narrative rotation, surface item diversity, recall noise reduction
+- **Post-compact cognitive injection** — cognitive state injected as first-class "you were here" block after compaction
+
+---
+
 ## [0.2.1] — 2026-03-05 — Quality & Isolation
 
 Post-v0.2.0 improvements targeting injection noise, mastery accuracy, schema detection, and multi-project isolation. All 1794 tests passing.
