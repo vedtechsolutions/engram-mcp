@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   REMINDERS
-} from "./chunk-V4B64BB2.js";
+} from "./chunk-GHQQCGMZ.js";
 
 // src/v2/tools/reminder-tools.ts
 import { v4 as uuid } from "uuid";
@@ -159,4 +159,4 @@ export {
   handleListReminders,
   checkReminders
 };
-//# sourceMappingURL=chunk-XAQ43TKA.js.map
+//# sourceMappingURL=chunk-WLNYX5GP.js.map

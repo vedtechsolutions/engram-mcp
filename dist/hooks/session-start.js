@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   compileBriefing
-} from "../chunk-NQLQQT2H.js";
+} from "../chunk-LSU5BWZW.js";
 import {
   CONFIDENCE,
   DECAY,
@@ -9,7 +9,7 @@ import {
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-V4B64BB2.js";
+} from "../chunk-GHQQCGMZ.js";
 
 // src/v2/hooks/session-start.ts
 import { v4 as uuid } from "uuid";

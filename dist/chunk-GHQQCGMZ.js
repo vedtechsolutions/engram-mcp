@@ -370,7 +370,18 @@ function openHookDb() {
   db.pragma("synchronous = NORMAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  migrateSchema(db);
   return db;
+}
+function migrateSchema(db) {
+  const cols = db.pragma("table_info(compaction_snapshots)");
+  const colNames = new Set(cols.map((c) => c.name));
+  if (!colNames.has("read_files")) {
+    db.exec("ALTER TABLE compaction_snapshots ADD COLUMN read_files TEXT");
+  }
+  if (!colNames.has("initial_goal")) {
+    db.exec("ALTER TABLE compaction_snapshots ADD COLUMN initial_goal TEXT");
+  }
 }
 function getStatePath() {
   const dir = join(homedir(), HOOK.STATE_DIR);
@@ -427,4 +438,4 @@ export {
   readHookStdin,
   writeStateFile
 };
-//# sourceMappingURL=chunk-V4B64BB2.js.map
+//# sourceMappingURL=chunk-GHQQCGMZ.js.map

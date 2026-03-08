@@ -4,6 +4,13 @@ All notable changes to the Engram cognitive memory system.
 
 ---
 
+## [2.2.1] — 2026-03-08 — Schema Migration Fix
+
+### Bug Fix
+- **Schema migration for existing databases** — `CREATE TABLE IF NOT EXISTS` doesn't add new columns to existing tables. Production DBs created before v2.2.0 were missing `read_files` and `initial_goal` columns, causing pre-compact snapshots to silently fail. Both `createDb()` and `openHookDb()` now run `migrateSchema()` which idempotently adds missing columns via `PRAGMA table_info` checks.
+
+---
+
 ## [2.2.0] — 2026-03-08 — Enhanced Compaction Recovery
 
 ### Compaction Recovery

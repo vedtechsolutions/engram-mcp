@@ -250,7 +250,7 @@ npx vitest run       # Run tests (271 tests across 15 files)
 
 ## Status
 
-**v2.2.0** — Enhanced compaction recovery: read tracking, goal extraction, richer briefings. 271 tests, 9 tools, 8 hooks.
+**v2.2.1** — Schema migration fix for existing databases. 271 tests, 9 tools, 8 hooks.
 
 ## License
 

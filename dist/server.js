@@ -3,7 +3,7 @@ import {
   REMINDER_TOOL_DEFINITIONS,
   handleListReminders,
   handleRemind
-} from "./chunk-XAQ43TKA.js";
+} from "./chunk-WLNYX5GP.js";
 import {
   CONFIDENCE,
   CONTENT,
@@ -14,7 +14,7 @@ import {
   RETRIEVAL,
   SCHEMA,
   readStateFile
-} from "./chunk-V4B64BB2.js";
+} from "./chunk-GHQQCGMZ.js";
 
 // src/v2/server.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -47,7 +47,18 @@ function createDb(dbPath2) {
   db2.pragma("synchronous = NORMAL");
   db2.pragma("foreign_keys = ON");
   db2.exec(SCHEMA);
+  migrateSchema(db2);
   return db2;
+}
+function migrateSchema(db2) {
+  const cols = db2.pragma("table_info(compaction_snapshots)");
+  const colNames = new Set(cols.map((c) => c.name));
+  if (!colNames.has("read_files")) {
+    db2.exec("ALTER TABLE compaction_snapshots ADD COLUMN read_files TEXT");
+  }
+  if (!colNames.has("initial_goal")) {
+    db2.exec("ALTER TABLE compaction_snapshots ADD COLUMN initial_goal TEXT");
+  }
 }
 
 // src/v2/db/memory-repository.ts

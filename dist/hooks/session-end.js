@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import "../chunk-NQLQQT2H.js";
+import "../chunk-LSU5BWZW.js";
 import {
   DEDUP,
   HOOK,
@@ -7,7 +7,7 @@ import {
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-V4B64BB2.js";
+} from "../chunk-GHQQCGMZ.js";
 
 // src/v2/hooks/session-end.ts
 function run(input, db) {
