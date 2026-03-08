@@ -5,7 +5,7 @@ import {
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-GHQQCGMZ.js";
+} from "../chunk-2PJDMCJB.js";
 
 // src/v2/hooks/success-tracker.ts
 function run(input, db, lastEdit) {

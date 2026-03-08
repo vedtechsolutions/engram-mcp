@@ -3,7 +3,7 @@ import {
   BRIEFING,
   CONFIDENCE,
   HOOK
-} from "./chunk-GHQQCGMZ.js";
+} from "./chunk-2PJDMCJB.js";
 
 // src/v2/hooks/shared/briefing.ts
 function compileBriefing(db, input) {
@@ -221,6 +221,7 @@ function parseTranscript(transcriptPath) {
     const files = /* @__PURE__ */ new Set();
     const reads = /* @__PURE__ */ new Set();
     const commands = [];
+    const bashToolIds = /* @__PURE__ */ new Map();
     const userMessages = [];
     const assistantTexts = [];
     for (const line of lines) {
@@ -230,51 +231,76 @@ function parseTranscript(transcriptPath) {
       } catch {
         continue;
       }
-      if (entry.type === "tool_use" && (entry.name === "Write" || entry.name === "Edit")) {
-        const path = entry.input?.file_path ?? entry.input?.path;
-        if (typeof path === "string") files.add(path);
-      }
-      if (entry.type === "tool_use" && entry.name === "Read") {
-        const path = entry.input?.file_path ?? entry.input?.path;
-        if (typeof path === "string") reads.add(path);
-      }
-      if (entry.type === "tool_use" && entry.name === "Glob") {
-        const pattern = entry.input?.pattern;
-        if (typeof pattern === "string") reads.add(`glob:${pattern}`);
-      }
-      if (entry.type === "tool_use" && entry.name === "Grep") {
-        const pattern = entry.input?.pattern;
-        const path = entry.input?.path;
-        if (typeof pattern === "string") {
-          reads.add(`grep:${pattern}${typeof path === "string" ? ` in ${path}` : ""}`);
+      const messageContent = entry.message?.content;
+      if (entry.type === "assistant" && Array.isArray(messageContent)) {
+        for (const block of messageContent) {
+          if (typeof block !== "object" || block === null) continue;
+          if (block.type === "tool_use") {
+            const input = block.input;
+            if (block.name === "Write" || block.name === "Edit") {
+              const path = input?.file_path ?? input?.path;
+              if (typeof path === "string") files.add(path);
+            }
+            if (block.name === "Read") {
+              const path = input?.file_path ?? input?.path;
+              if (typeof path === "string") reads.add(path);
+            }
+            if (block.name === "Glob") {
+              const pattern = input?.pattern;
+              if (typeof pattern === "string") reads.add(`glob:${pattern}`);
+            }
+            if (block.name === "Grep") {
+              const pattern = input?.pattern;
+              const path = input?.path;
+              if (typeof pattern === "string") {
+                reads.add(`grep:${pattern}${typeof path === "string" ? ` in ${path}` : ""}`);
+              }
+            }
+            if (block.name === "Bash") {
+              const cmd = input?.command;
+              if (typeof cmd === "string") {
+                const idx = commands.length;
+                commands.push({
+                  command: cmd.slice(0, 100),
+                  exitCode: 0,
+                  outputSummary: ""
+                });
+                if (typeof block.id === "string") {
+                  bashToolIds.set(block.id, idx);
+                }
+              }
+            }
+          }
+          if (block.type === "text" && typeof block.text === "string" && block.text) {
+            assistantTexts.push(block.text);
+          }
         }
-      }
-      if (entry.type === "tool_use" && entry.name === "Bash") {
-        const cmd = entry.input?.command;
-        if (typeof cmd === "string") {
-          commands.push({
-            command: cmd.slice(0, 100),
-            exitCode: 0,
-            // Updated from tool_result if available
-            outputSummary: ""
-          });
-        }
-      }
-      if (entry.type === "tool_result" && commands.length > 0) {
-        const text = typeof entry.content === "string" ? entry.content : Array.isArray(entry.content) ? entry.content.map((c) => c.text ?? "").join("") : "";
-        const exitMatch = text.match(/Exit code: (\d+)/);
-        if (exitMatch) {
-          commands[commands.length - 1].exitCode = parseInt(exitMatch[1], 10);
-        }
-        commands[commands.length - 1].outputSummary = text.slice(0, 80);
       }
       if (entry.type === "user") {
-        const text = typeof entry.content === "string" ? entry.content : Array.isArray(entry.content) ? entry.content.filter((c) => c.type === "text").map((c) => c.text ?? "").join(" ") : "";
-        if (text) userMessages.push(text);
-      }
-      if (entry.type === "assistant") {
-        const text = Array.isArray(entry.content) ? entry.content.filter((c) => c.type === "text").map((c) => c.text ?? "").join(" ") : typeof entry.content === "string" ? entry.content : "";
-        if (text) assistantTexts.push(text);
+        if (typeof messageContent === "string") {
+          if (messageContent) userMessages.push(messageContent);
+        } else if (Array.isArray(messageContent)) {
+          const textParts = [];
+          for (const block of messageContent) {
+            if (typeof block !== "object" || block === null) continue;
+            if (block.type === "text" && typeof block.text === "string") {
+              textParts.push(block.text);
+            }
+            if (block.type === "tool_result" && typeof block.tool_use_id === "string") {
+              const cmdIdx = bashToolIds.get(block.tool_use_id);
+              if (cmdIdx !== void 0 && cmdIdx < commands.length) {
+                const resultText = typeof block.content === "string" ? block.content : "";
+                const exitMatch = resultText.match(/Exit code[:\s]+(\d+)/);
+                if (exitMatch) {
+                  commands[cmdIdx].exitCode = parseInt(exitMatch[1], 10);
+                }
+                commands[cmdIdx].outputSummary = resultText.slice(0, 80);
+              }
+            }
+          }
+          const joined = textParts.join(" ");
+          if (joined) userMessages.push(joined);
+        }
       }
     }
     const recentFiles = [...files].slice(-20);
@@ -298,4 +324,4 @@ export {
   compileBriefing,
   parseTranscript
 };
-//# sourceMappingURL=chunk-LSU5BWZW.js.map
+//# sourceMappingURL=chunk-CMESQ3P2.js.map

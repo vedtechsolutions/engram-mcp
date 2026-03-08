@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import "../chunk-LSU5BWZW.js";
+import "../chunk-CMESQ3P2.js";
 import {
   CONTEXT_MODES,
   getProjectId,
   openHookDb,
   readHookStdin,
   writeStateFile
-} from "../chunk-GHQQCGMZ.js";
+} from "../chunk-2PJDMCJB.js";
 
 // src/v2/hooks/statusline.ts
 function run(input) {

@@ -6,7 +6,7 @@ import {
   openHookDb,
   readHookStdin,
   readStateFile
-} from "../chunk-GHQQCGMZ.js";
+} from "../chunk-2PJDMCJB.js";
 
 // src/v2/hooks/pitfall-check.ts
 import { extname } from "path";

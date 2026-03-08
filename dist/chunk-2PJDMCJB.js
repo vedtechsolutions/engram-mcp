@@ -402,7 +402,12 @@ function readStateFile() {
 }
 var MAX_STDIN_BYTES = 1048576;
 function readHookStdin() {
-  const raw = readFileSync("/dev/stdin", "utf8");
+  let raw;
+  try {
+    raw = readFileSync("/dev/stdin", "utf8");
+  } catch {
+    raw = readFileSync(0, "utf8");
+  }
   if (raw.length > MAX_STDIN_BYTES) return raw.slice(0, MAX_STDIN_BYTES);
   return raw;
 }
@@ -438,4 +443,4 @@ export {
   readHookStdin,
   writeStateFile
 };
-//# sourceMappingURL=chunk-GHQQCGMZ.js.map
+//# sourceMappingURL=chunk-2PJDMCJB.js.map
