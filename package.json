@@ -1,15 +1,13 @@
 {
   "name": "@vedtechsolutions/engram-mcp",
   "version": "2.0.0",
-  "description": "Cognitive memory system for AI — persistent, cross-session learning via MCP",
+  "description": "Persistent memory for Claude Code — survives context compaction",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/server.js",
+  "types": "dist/server.d.ts",
   "bin": {
-    "engram-mcp": "dist/index.js",
-    "engram-hook": "dist/hook.js",
-    "engram-setup": "bin/setup.js",
-    "engram-import-pack": "bin/import-pack.js"
+    "engram-mcp": "dist/server.js",
+    "engram-setup": "bin/setup.js"
   },
   "scripts": {
     "setup": "node bin/setup.js",
