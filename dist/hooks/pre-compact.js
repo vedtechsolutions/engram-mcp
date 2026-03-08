@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import {
   parseTranscript
-} from "../chunk-J5XI5KSX.js";
+} from "../chunk-NQLQQT2H.js";
 import {
   HOOK,
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-6WMCIY6C.js";
+} from "../chunk-V4B64BB2.js";
 
 // src/v2/hooks/pre-compact.ts
 import { v4 as uuid } from "uuid";
@@ -44,17 +44,19 @@ function run(input, db) {
   }
   const snapshotId = uuid();
   db.prepare(`
-    INSERT INTO compaction_snapshots (id, session_id, project, captured_at, recent_files, recent_commands, user_context, approach_notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO compaction_snapshots (id, session_id, project, captured_at, recent_files, read_files, recent_commands, user_context, approach_notes, initial_goal)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     snapshotId,
     sessionId,
     project,
     now,
     JSON.stringify(transcript.recentFiles),
+    JSON.stringify(transcript.readFiles),
     JSON.stringify(transcript.recentCommands),
     JSON.stringify(transcript.userContext),
-    JSON.stringify(transcript.approachNotes)
+    JSON.stringify(transcript.approachNotes),
+    transcript.initialGoal
   );
   db.prepare(
     "DELETE FROM compaction_snapshots WHERE project = ? AND session_id != ?"

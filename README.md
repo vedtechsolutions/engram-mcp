@@ -178,7 +178,7 @@ That's it. Engram starts learning from your first session.
 | Hook | Event | What Happens |
 |---|---|---|
 | `session-start` | Session begin | Injects briefing: plan status, pitfalls, interrupted session recovery |
-| `pre-compact` | Before compaction | Saves snapshot: files, commands, user context, approach notes |
+| `pre-compact` | Before compaction | Saves snapshot: modified files, read files, commands, goal, context, approach |
 | `session-end` | Session end | Closes session, promotes cross-project pitfalls to global |
 | `error-learning` | Tool failure | Classifies error, encodes as pitfall, boosts on repeat |
 | `pitfall-check` | Before Write/Edit/Bash | Surfaces relevant pitfalls for the file/command |
@@ -233,7 +233,7 @@ Engram maintains itself automatically:
 ```bash
 pnpm install         # Install dependencies
 npx tsup             # Build (ESM, node20 target)
-npx vitest run       # Run tests (263 tests across 15 files)
+npx vitest run       # Run tests (271 tests across 15 files)
 ```
 
 ## Technology Stack
@@ -250,7 +250,7 @@ npx vitest run       # Run tests (263 tests across 15 files)
 
 ## Status
 
-**v2.1.0** — Mode-aware hook scaling, richer compaction snapshots. 263 tests, 9 tools, 8 hooks.
+**v2.2.0** — Enhanced compaction recovery: read tracking, goal extraction, richer briefings. 271 tests, 9 tools, 8 hooks.
 
 ## License
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   checkReminders
-} from "../chunk-J5GECJBB.js";
+} from "../chunk-XAQ43TKA.js";
 import {
   CONFIDENCE,
   INTENT_PATTERNS,
@@ -10,7 +10,7 @@ import {
   openHookDb,
   readHookStdin,
   readStateFile
-} from "../chunk-6WMCIY6C.js";
+} from "../chunk-V4B64BB2.js";
 
 // src/v2/hooks/prompt-check.ts
 import { v4 as uuid } from "uuid";

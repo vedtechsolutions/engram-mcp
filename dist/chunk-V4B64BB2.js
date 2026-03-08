@@ -307,9 +307,11 @@ CREATE TABLE IF NOT EXISTS compaction_snapshots (
   project TEXT NOT NULL,
   captured_at TEXT NOT NULL,
   recent_files TEXT,        -- JSON array
+  read_files TEXT,           -- JSON array (Read/Glob/Grep paths)
   recent_commands TEXT,      -- JSON array
   user_context TEXT,
-  approach_notes TEXT
+  approach_notes TEXT,
+  initial_goal TEXT          -- First substantial user message
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_session ON compaction_snapshots(session_id);
@@ -425,4 +427,4 @@ export {
   readHookStdin,
   writeStateFile
 };
-//# sourceMappingURL=chunk-6WMCIY6C.js.map
+//# sourceMappingURL=chunk-V4B64BB2.js.map

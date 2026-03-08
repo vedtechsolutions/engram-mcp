@@ -3,7 +3,7 @@ import {
   BRIEFING,
   CONFIDENCE,
   HOOK
-} from "./chunk-6WMCIY6C.js";
+} from "./chunk-V4B64BB2.js";
 
 // src/v2/hooks/shared/briefing.ts
 function compileBriefing(db, input) {
@@ -103,9 +103,19 @@ function formatPlanSection(plan, interrupted) {
 }
 function formatSnapshotSection(snapshot) {
   const lines = ["Recovery:"];
+  if (snapshot.initial_goal) {
+    const goal = snapshot.initial_goal.length > 120 ? snapshot.initial_goal.slice(0, 117) + "..." : snapshot.initial_goal;
+    lines.push(`  Goal: ${goal}`);
+  }
   if (snapshot.recent_files.length > 0) {
-    const files = snapshot.recent_files.slice(0, 5).map((f) => f.split("/").pop()).join(", ");
-    lines.push(`  Files: ${files}`);
+    const files = snapshot.recent_files.slice(-5).map((f) => f.split("/").pop()).join(", ");
+    lines.push(`  Modified: ${files}`);
+  }
+  if (snapshot.read_files.length > 0) {
+    const fileReads = snapshot.read_files.filter((f) => !f.startsWith("glob:") && !f.startsWith("grep:")).slice(-5).map((f) => f.split("/").pop());
+    if (fileReads.length > 0) {
+      lines.push(`  Read: ${fileReads.join(", ")}`);
+    }
   }
   if (snapshot.recent_commands.length > 0) {
     const last = snapshot.recent_commands[snapshot.recent_commands.length - 1];
@@ -188,9 +198,11 @@ import { homedir } from "os";
 function parseTranscript(transcriptPath) {
   const empty = {
     recentFiles: [],
+    readFiles: [],
     recentCommands: [],
     userContext: [],
-    approachNotes: []
+    approachNotes: [],
+    initialGoal: null
   };
   const resolved = resolve(transcriptPath);
   const claudeDir = resolve(homedir(), ".claude");
@@ -207,6 +219,7 @@ function parseTranscript(transcriptPath) {
     const allLines = content.split("\n").filter(Boolean);
     const lines = allLines.slice(-HOOK.TRANSCRIPT_MAX_LINES);
     const files = /* @__PURE__ */ new Set();
+    const reads = /* @__PURE__ */ new Set();
     const commands = [];
     const userMessages = [];
     const assistantTexts = [];
@@ -220,6 +233,21 @@ function parseTranscript(transcriptPath) {
       if (entry.type === "tool_use" && (entry.name === "Write" || entry.name === "Edit")) {
         const path = entry.input?.file_path ?? entry.input?.path;
         if (typeof path === "string") files.add(path);
+      }
+      if (entry.type === "tool_use" && entry.name === "Read") {
+        const path = entry.input?.file_path ?? entry.input?.path;
+        if (typeof path === "string") reads.add(path);
+      }
+      if (entry.type === "tool_use" && entry.name === "Glob") {
+        const pattern = entry.input?.pattern;
+        if (typeof pattern === "string") reads.add(`glob:${pattern}`);
+      }
+      if (entry.type === "tool_use" && entry.name === "Grep") {
+        const pattern = entry.input?.pattern;
+        const path = entry.input?.path;
+        if (typeof pattern === "string") {
+          reads.add(`grep:${pattern}${typeof path === "string" ? ` in ${path}` : ""}`);
+        }
       }
       if (entry.type === "tool_use" && entry.name === "Bash") {
         const cmd = entry.input?.command;
@@ -250,6 +278,7 @@ function parseTranscript(transcriptPath) {
       }
     }
     const recentFiles = [...files].slice(-20);
+    const readFiles = [...reads].slice(-20);
     const recentCommands = commands.slice(-5);
     const userContext = userMessages.slice(-3).map(
       (m) => m.length > 200 ? m.slice(0, 197) + "..." : m
@@ -257,7 +286,9 @@ function parseTranscript(transcriptPath) {
     const approachNotes = assistantTexts.slice(-5).map(
       (t) => t.length > 150 ? t.slice(0, 147) + "..." : t
     );
-    return { recentFiles, recentCommands, userContext, approachNotes };
+    const firstSubstantial = userMessages.find((m) => m.length >= 20);
+    const initialGoal = firstSubstantial ? firstSubstantial.length > 200 ? firstSubstantial.slice(0, 197) + "..." : firstSubstantial : null;
+    return { recentFiles, readFiles, recentCommands, userContext, approachNotes, initialGoal };
   } catch {
     return empty;
   }
@@ -267,4 +298,4 @@ export {
   compileBriefing,
   parseTranscript
 };
-//# sourceMappingURL=chunk-J5XI5KSX.js.map
+//# sourceMappingURL=chunk-NQLQQT2H.js.map

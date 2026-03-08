@@ -4,6 +4,27 @@ All notable changes to the Engram cognitive memory system.
 
 ---
 
+## [2.2.0] — 2026-03-08 — Enhanced Compaction Recovery
+
+### Compaction Recovery
+- **Read file tracking** — transcript parser now captures Read/Glob/Grep tool calls in a separate `readFiles` set, giving Claude visibility into what was being investigated before compaction
+- **Initial goal extraction** — first substantial user message (≥20 chars) preserved as `initialGoal`, surfaced as `Goal:` in recovery briefing
+- **Enhanced recovery sections** — post-compaction briefing now shows:
+  - `Goal:` — what the session was about
+  - `Modified:` — files changed (Write/Edit)
+  - `Read:` — files investigated (Read only, glob/grep filtered for brevity)
+  - `Last cmd:`, `Context:`, `Approach:` — unchanged from v2.1.0
+
+### Schema
+- Added `read_files TEXT` and `initial_goal TEXT` columns to `compaction_snapshots` table
+- Backward compatible: old snapshots without these columns fall back to `[]` and `null`
+
+### Tests
+- **271 tests** across 15 files (up from 263)
+- 8 new tests for read tracking, initial goal extraction, and enhanced briefing sections
+
+---
+
 ## [2.1.0] — 2026-03-08 — Mode-Aware Hook Scaling & Richer Snapshots
 
 ### Signal-to-Noise Improvements
