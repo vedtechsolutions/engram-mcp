@@ -1,25 +1,30 @@
 #!/usr/bin/env node
 import {
   CONFIDENCE,
-  LEARNING,
+  MODE_LIMITS,
   getProjectId,
   openHookDb,
-  readHookStdin
-} from "../chunk-H5CEFO34.js";
+  readHookStdin,
+  readStateFile
+} from "../chunk-6WMCIY6C.js";
 
 // src/v2/hooks/pitfall-check.ts
 import { extname } from "path";
-function run(input, db) {
+function run(input, db, mode) {
+  const effectiveMode = mode ?? "normal";
+  const limits = MODE_LIMITS[effectiveMode];
   const project = getProjectId(input.cwd);
   if (input.tool_name === "Write" || input.tool_name === "Edit") {
-    return checkFilePitfalls(db, project, input.tool_input);
+    if (limits.pitfallCheckFile <= 0) return { permissionDecision: "allow" };
+    return checkFilePitfalls(db, project, input.tool_input, limits.pitfallCheckFile);
   }
   if (input.tool_name === "Bash") {
-    return checkCommandPitfalls(db, project, input.tool_input);
+    if (limits.pitfallCheckBash <= 0) return { permissionDecision: "allow" };
+    return checkCommandPitfalls(db, project, input.tool_input, limits.pitfallCheckBash);
   }
   return { permissionDecision: "allow" };
 }
-function checkFilePitfalls(db, project, toolInput) {
+function checkFilePitfalls(db, project, toolInput, limit) {
   const filePath = String(toolInput.file_path ?? "");
   if (!filePath) return { permissionDecision: "allow" };
   const rawExt = extname(filePath).slice(1);
@@ -38,7 +43,7 @@ function checkFilePitfalls(db, project, toolInput) {
     CONFIDENCE.MIN_FOR_PITFALL_SURFACE,
     project,
     `%"${ext}"%`,
-    LEARNING.MAX_PITFALL_SURFACE
+    limit
   );
   if (pitfalls.length === 0) return { permissionDecision: "allow" };
   const warnings = pitfalls.map((p) => `- ${p.content}`).join("\n");
@@ -48,7 +53,7 @@ function checkFilePitfalls(db, project, toolInput) {
 ${warnings}`
   };
 }
-function checkCommandPitfalls(db, project, toolInput) {
+function checkCommandPitfalls(db, project, toolInput, limit) {
   const command = String(toolInput.command ?? "");
   if (!command || command.length < 3) return { permissionDecision: "allow" };
   const keywords = command.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3 && !isCommonWord(w)).slice(0, 5).map((w) => `"${w}"`).join(" OR ");
@@ -63,12 +68,14 @@ function checkCommandPitfalls(db, project, toolInput) {
         AND memories.confidence >= ?
         AND (memories.project = ? OR memories.project IS NULL)
       ORDER BY bm25(memories_fts)
-      LIMIT 1
-    `).all(keywords, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project);
+      LIMIT ?
+    `).all(keywords, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project, limit);
     if (pitfalls.length === 0) return { permissionDecision: "allow" };
+    const warnings = pitfalls.map((p) => `- ${p.content}`).join("\n");
     return {
       permissionDecision: "allow",
-      additionalContext: `[ENGRAM] Warning: ${pitfalls[0].content}`
+      additionalContext: `[ENGRAM] Warning:
+${warnings}`
     };
   } catch {
     return { permissionDecision: "allow" };
@@ -111,7 +118,8 @@ if (process.argv[1] && !process.argv[1].includes("vitest")) {
     const raw = readHookStdin();
     const input = JSON.parse(raw);
     db = openHookDb();
-    const result = run(input, db);
+    const state = readStateFile();
+    const result = run(input, db, state.mode);
     if (result.additionalContext) {
       const output = JSON.stringify({
         hookSpecificOutput: {

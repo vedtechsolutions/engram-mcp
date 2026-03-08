@@ -113,6 +113,34 @@ var CONTEXT_ADAPTIVE = {
   COMPACT_CONTENT_MAX_CHARS: 100,
   MINIMAL_CONTENT_SENTENCES: 1
 };
+var MODE_LIMITS = {
+  normal: {
+    promptCheckPitfalls: 3,
+    pitfallCheckFile: 2,
+    // matches LEARNING.MAX_PITFALL_SURFACE
+    pitfallCheckBash: 1,
+    maxReminders: 3
+    // matches REMINDERS.MAX_FIRE_PER_PROMPT
+  },
+  compact: {
+    promptCheckPitfalls: 1,
+    pitfallCheckFile: 1,
+    pitfallCheckBash: 0,
+    maxReminders: 1
+  },
+  minimal: {
+    promptCheckPitfalls: 0,
+    pitfallCheckFile: 0,
+    pitfallCheckBash: 0,
+    maxReminders: 0
+  },
+  critical: {
+    promptCheckPitfalls: 0,
+    pitfallCheckFile: 0,
+    pitfallCheckBash: 0,
+    maxReminders: 0
+  }
+};
 var LEARNING = {
   MAX_PITFALL_SURFACE: 2,
   // Max pitfalls to surface per PreToolUse
@@ -387,6 +415,7 @@ export {
   INTENT_PATTERNS,
   HOOK,
   CONTEXT_ADAPTIVE,
+  MODE_LIMITS,
   LEARNING,
   ERROR_PATTERNS,
   NOISE_ERROR_PATTERNS,
@@ -396,4 +425,4 @@ export {
   readHookStdin,
   writeStateFile
 };
-//# sourceMappingURL=chunk-H5CEFO34.js.map
+//# sourceMappingURL=chunk-6WMCIY6C.js.map

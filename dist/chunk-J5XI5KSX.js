@@ -3,7 +3,7 @@ import {
   BRIEFING,
   CONFIDENCE,
   HOOK
-} from "./chunk-H5CEFO34.js";
+} from "./chunk-6WMCIY6C.js";
 
 // src/v2/hooks/shared/briefing.ts
 function compileBriefing(db, input) {
@@ -112,9 +112,17 @@ function formatSnapshotSection(snapshot) {
     const cmd = last.command.length > 60 ? last.command.slice(0, 57) + "..." : last.command;
     lines.push(`  Last cmd: ${cmd} (exit:${last.exit_code})`);
   }
-  if (snapshot.user_context) {
-    const ctx = snapshot.user_context.length > 100 ? snapshot.user_context.slice(0, 97) + "..." : snapshot.user_context;
-    lines.push(`  Context: ${ctx}`);
+  if (snapshot.user_context.length > 0) {
+    const msgs = snapshot.user_context.slice(-2).map((m) => {
+      const trimmed = m.length > 100 ? m.slice(0, 97) + "..." : m;
+      return trimmed;
+    });
+    lines.push(`  Context: ${msgs.join(" | ")}`);
+  }
+  if (snapshot.approach_notes.length > 0) {
+    const last = snapshot.approach_notes[snapshot.approach_notes.length - 1];
+    const note = last.length > 100 ? last.slice(0, 97) + "..." : last;
+    lines.push(`  Approach: ${note}`);
   }
   return lines.join("\n");
 }
@@ -181,8 +189,8 @@ function parseTranscript(transcriptPath) {
   const empty = {
     recentFiles: [],
     recentCommands: [],
-    userContext: "",
-    approachNotes: null
+    userContext: [],
+    approachNotes: []
   };
   const resolved = resolve(transcriptPath);
   const claudeDir = resolve(homedir(), ".claude");
@@ -201,7 +209,7 @@ function parseTranscript(transcriptPath) {
     const files = /* @__PURE__ */ new Set();
     const commands = [];
     const userMessages = [];
-    let lastAssistantText = null;
+    const assistantTexts = [];
     for (const line of lines) {
       let entry;
       try {
@@ -238,14 +246,17 @@ function parseTranscript(transcriptPath) {
       }
       if (entry.type === "assistant") {
         const text = Array.isArray(entry.content) ? entry.content.filter((c) => c.type === "text").map((c) => c.text ?? "").join(" ") : typeof entry.content === "string" ? entry.content : "";
-        if (text) lastAssistantText = text;
+        if (text) assistantTexts.push(text);
       }
     }
     const recentFiles = [...files].slice(-20);
     const recentCommands = commands.slice(-5);
-    const lastTwo = userMessages.slice(-2).join(" ");
-    const userContext = lastTwo.length > 200 ? lastTwo.slice(0, 197) + "..." : lastTwo;
-    const approachNotes = lastAssistantText ? lastAssistantText.length > 150 ? lastAssistantText.slice(0, 147) + "..." : lastAssistantText : null;
+    const userContext = userMessages.slice(-3).map(
+      (m) => m.length > 200 ? m.slice(0, 197) + "..." : m
+    );
+    const approachNotes = assistantTexts.slice(-5).map(
+      (t) => t.length > 150 ? t.slice(0, 147) + "..." : t
+    );
     return { recentFiles, recentCommands, userContext, approachNotes };
   } catch {
     return empty;
@@ -256,4 +267,4 @@ export {
   compileBriefing,
   parseTranscript
 };
-//# sourceMappingURL=chunk-TZSPYETU.js.map
+//# sourceMappingURL=chunk-J5XI5KSX.js.map

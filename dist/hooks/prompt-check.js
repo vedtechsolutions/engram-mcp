@@ -1,20 +1,24 @@
 #!/usr/bin/env node
 import {
   checkReminders
-} from "../chunk-7JDXGIE6.js";
+} from "../chunk-J5GECJBB.js";
 import {
   CONFIDENCE,
   INTENT_PATTERNS,
+  MODE_LIMITS,
   getProjectId,
   openHookDb,
-  readHookStdin
-} from "../chunk-H5CEFO34.js";
+  readHookStdin,
+  readStateFile
+} from "../chunk-6WMCIY6C.js";
 
 // src/v2/hooks/prompt-check.ts
 import { v4 as uuid } from "uuid";
-function run(input, db) {
+function run(input, db, mode) {
   const prompt = input.content ?? input.prompt ?? "";
   if (!prompt || prompt.length < 5) return {};
+  const effectiveMode = mode ?? "normal";
+  const limits = MODE_LIMITS[effectiveMode];
   const project = getProjectId(input.cwd);
   const result = {};
   if (isCorrection(prompt)) {
@@ -24,17 +28,20 @@ function run(input, db) {
       result.correctionEncoded = true;
     }
   }
-  const pitfalls = recallRelevantPitfalls(db, project, prompt);
   const contextParts = [];
-  if (pitfalls.length > 0) {
-    const warnings = pitfalls.map((p) => `- ${p}`).join("\n");
-    contextParts.push(`[ENGRAM] Relevant pitfalls:
+  if (limits.promptCheckPitfalls > 0) {
+    const pitfalls = recallRelevantPitfalls(db, project, prompt, limits.promptCheckPitfalls);
+    if (pitfalls.length > 0) {
+      const warnings = pitfalls.map((p) => `- ${p}`).join("\n");
+      contextParts.push(`[ENGRAM] Relevant pitfalls:
 ${warnings}`);
+    }
   }
-  if (!result.correctionEncoded) {
+  if (!result.correctionEncoded && limits.maxReminders > 0) {
     const fired = checkReminders(db, prompt, project);
-    if (fired.length > 0) {
-      const lines = fired.map((r) => `[ENGRAM REMINDER] ${r.action}`);
+    const capped = fired.slice(0, limits.maxReminders);
+    if (capped.length > 0) {
+      const lines = capped.map((r) => `[ENGRAM REMINDER] ${r.action}`);
       contextParts.push(lines.join("\n"));
     }
   }
@@ -70,7 +77,7 @@ function encodeCorrection(db, content) {
     VALUES (?, ?, 'correction', NULL, '[]', ?, 'corrected', ?, 0, 0)
   `).run(id, content, CONFIDENCE.DEFAULT_LEARNED, now);
 }
-function recallRelevantPitfalls(db, project, prompt) {
+function recallRelevantPitfalls(db, project, prompt, limit) {
   const words = prompt.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3).slice(0, 8).map((w) => `"${w}"`).join(" OR ");
   if (!words) return [];
   try {
@@ -83,8 +90,8 @@ function recallRelevantPitfalls(db, project, prompt) {
         AND memories.confidence >= ?
         AND (memories.project = ? OR memories.project IS NULL)
       ORDER BY bm25(memories_fts)
-      LIMIT 3
-    `).all(words, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project);
+      LIMIT ?
+    `).all(words, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project, limit);
     return rows.map((r) => r.content);
   } catch {
     return [];
@@ -130,7 +137,8 @@ if (process.argv[1] && !process.argv[1].includes("vitest")) {
     const raw = readHookStdin();
     const input = JSON.parse(raw);
     db = openHookDb();
-    const result = run(input, db);
+    const state = readStateFile();
+    const result = run(input, db, state.mode);
     if (result.additionalContext) {
       process.stdout.write(result.additionalContext);
     }

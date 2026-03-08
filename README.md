@@ -190,12 +190,12 @@ That's it. Engram starts learning from your first session.
 
 Engram monitors context window pressure and adjusts automatically:
 
-| Mode | Context Free | Behavior |
-|---|---|---|
-| `normal` | > 50% | Full recall, full plan output |
-| `compact` | 25–50% | 3 results max, current step only |
-| `minimal` | 10–25% | 2 results, no new learning |
-| `critical` | < 10% | Silent — preserves remaining context |
+| Mode | Context Free | MCP Recall | Hook Injection |
+|---|---|---|---|
+| `normal` | > 50% | Full (5 results) | 3 prompt pitfalls, 2 file pitfalls, 1 bash pitfall, 3 reminders |
+| `compact` | 25–50% | Reduced (3 results) | 1 prompt pitfall, 1 file pitfall, 0 bash, 1 reminder (~200 tokens max) |
+| `minimal` | 10–25% | Minimal (2 results) | **Zero** — all hook injection disabled |
+| `critical` | < 10% | Silent | **Zero** — preserves remaining context |
 
 ## Memory Types
 
@@ -233,7 +233,7 @@ Engram maintains itself automatically:
 ```bash
 pnpm install         # Install dependencies
 npx tsup             # Build (ESM, node20 target)
-npx vitest run       # Run tests (249 tests across 15 files)
+npx vitest run       # Run tests (263 tests across 15 files)
 ```
 
 ## Technology Stack
@@ -250,7 +250,7 @@ npx vitest run       # Run tests (249 tests across 15 files)
 
 ## Status
 
-**v2.0.0** — Ground-up rewrite. 24 source files, 249 tests, 9 tools, 8 hooks.
+**v2.1.0** — Mode-aware hook scaling, richer compaction snapshots. 263 tests, 9 tools, 8 hooks.
 
 ## License
 

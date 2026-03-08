@@ -7,7 +7,7 @@ import {
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-H5CEFO34.js";
+} from "../chunk-6WMCIY6C.js";
 
 // src/v2/hooks/error-learning.ts
 import { v4 as uuid } from "uuid";

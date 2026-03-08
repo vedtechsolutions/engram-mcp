@@ -4,6 +4,33 @@ All notable changes to the Engram cognitive memory system.
 
 ---
 
+## [2.1.0] — 2026-03-08 — Mode-Aware Hook Scaling & Richer Snapshots
+
+### Signal-to-Noise Improvements
+- **Mode-aware hook scaling** — hooks now read context mode from state file and scale injection volume:
+  - `normal`: full injection (3 prompt pitfalls, 2 file pitfalls, 1 bash pitfall, 3 reminders)
+  - `compact`: reduced injection (1 prompt pitfall, 1 file pitfall, 0 bash pitfalls, 1 reminder)
+  - `minimal`/`critical`: **zero injection** — complete silence when context is tight
+- **~520 → ~200 max tokens in compact mode**, zero in minimal/critical
+- Corrections are always encoded regardless of mode (high value, low noise)
+
+### Richer Compaction Snapshots
+- `user_context` now stores **array of last 3 user messages** (was: single concatenated string truncated to 200 chars)
+- `approach_notes` now stores **array of last 5 assistant texts** (was: single string truncated to 150 chars)
+- Briefing recovery section now shows last 2 user messages and latest approach note
+- Backward compatible: old plain-string snapshots gracefully fall back to empty arrays
+
+### Constants
+- Added `MODE_LIMITS` constant mapping each context mode to per-hook injection limits
+- `prompt-check` and `pitfall-check` accept optional `mode` parameter (testable, CLI reads from state file)
+
+### Tests
+- **263 tests** across 15 files (up from 249)
+- 14 new tests for mode-aware scaling in prompt-check and pitfall-check
+- Updated transcript and briefing tests for array-based snapshots
+
+---
+
 ## [2.0.0] — 2026-03-08 — Ground-Up Rewrite
 
 ### Breaking Changes

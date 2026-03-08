@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   compileBriefing
-} from "../chunk-TZSPYETU.js";
+} from "../chunk-J5XI5KSX.js";
 import {
   CONFIDENCE,
   DECAY,
@@ -9,7 +9,7 @@ import {
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-H5CEFO34.js";
+} from "../chunk-6WMCIY6C.js";
 
 // src/v2/hooks/session-start.ts
 import { v4 as uuid } from "uuid";
@@ -154,8 +154,8 @@ function handleCompact(db, project, sessionId) {
     captured_at: snapshotRow.captured_at,
     recent_files: safeJsonParse(snapshotRow.recent_files, []),
     recent_commands: safeJsonParse(snapshotRow.recent_commands, []),
-    user_context: snapshotRow.user_context ?? "",
-    approach_notes: snapshotRow.approach_notes
+    user_context: safeJsonParse(snapshotRow.user_context, []),
+    approach_notes: safeJsonParse(snapshotRow.approach_notes, [])
   } : null;
   let briefing = compileBriefing(db, {
     project,

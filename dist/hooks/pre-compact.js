@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import {
   parseTranscript
-} from "../chunk-TZSPYETU.js";
+} from "../chunk-J5XI5KSX.js";
 import {
   HOOK,
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-H5CEFO34.js";
+} from "../chunk-6WMCIY6C.js";
 
 // src/v2/hooks/pre-compact.ts
 import { v4 as uuid } from "uuid";
@@ -53,8 +53,8 @@ function run(input, db) {
     now,
     JSON.stringify(transcript.recentFiles),
     JSON.stringify(transcript.recentCommands),
-    transcript.userContext,
-    transcript.approachNotes
+    JSON.stringify(transcript.userContext),
+    JSON.stringify(transcript.approachNotes)
   );
   db.prepare(
     "DELETE FROM compaction_snapshots WHERE project = ? AND session_id != ?"
