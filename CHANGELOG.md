@@ -4,7 +4,161 @@ All notable changes to the Engram cognitive memory system.
 
 ---
 
-> **Note:** Versioning aligned to npm from v1.0.5 onwards. Earlier versions used 0.2.x in git.
+## [2.0.0] — 2026-03-08 — Ground-Up Rewrite
+
+### Breaking Changes
+- **Complete v1 removal** — all 31 engines, 16 tools, 14 hook handlers, 91 test files, and v1 scripts deleted
+- **New MCP server** — `dist/server.js` replaces `dist/index.js` (9 tools, down from 16)
+- **New hook system** — 8 independent hook scripts replace the monolithic `dist/hook.js`
+- **New database** — `~/.engram/v2/engram.db` (separate from v1's `~/.engram/engram.db`)
+- **Removed tools**: `engram_encode`, `engram_experience`, `engram_immune_check`, `engram_set_goal`, `engram_list_goals`, `engram_self`, `engram_vaccinate`, `engram_stats`, `engram_consolidate`, `engram_cleanup`
+- **Removed resources**: `engram://context`, `engram://antipatterns`, `engram://version`
+
+### Architecture
+- **24 source files** (down from 47+), **249 tests** across 15 files (down from 2393 across 106)
+- **9 MCP tools**: recall, learn, correct, forget, strengthen, weaken, plan, remind, list_reminders
+- **8 hook scripts**: session-start, pre-compact, session-end, error-learning, pitfall-check, prompt-check, success-tracker, statusline
+- **4 memory kinds**: pitfall, decision, correction, fact (down from 4 types + subtypes)
+- **Zero-token hooks** — all automatic injection runs outside the context window
+- **~180 token post-compaction injection** (down from ~2000+ tokens in v1)
+- **Context-adaptive modes**: normal/compact/minimal/critical based on context window pressure
+
+### New Features
+- **Plan tracking** — `engram_plan` with steps, decisions, notes, dependencies
+- **Prospective memory** — `engram_remind` / `engram_list_reminders` with FTS5-based trigger matching
+- **Cross-project pitfall promotion** — project-scoped pitfalls promoted to global after 3+ session recalls
+- **Confidence decay** — 0.9x per 30 days without recall, auto-delete below 0.1 (corrections exempt)
+- **Success tracking** — confidence boost on pitfalls you successfully avoided
+- **Interrupted session detection** — briefing flags `[interrupted]` with last plan step
+- **Compaction snapshots** — pre-compact hook saves files, commands, context, approach notes
+- **StatusLine** — shows context mode, memory count, reminder count
+- **Migration script** — `scripts/migrate-v1-to-v2.ts` converts v1 memories and reminders
+
+### Security Hardening
+- Standardized FTS5 sanitization to allowlist pattern (`[^a-zA-Z0-9\s]`) across all 7 locations
+- File extension sanitization in LIKE patterns (pitfall-check, success-tracker)
+- Transcript path traversal guard (only `~/.claude/` and `/tmp/`)
+- 1MB stdin cap on all hook inputs via `readHookStdin()`
+- Negative `max_results` guard (SQLite `LIMIT -1` = unlimited)
+- Length limit on `engram_correct` `new_content` (max 2000 chars)
+- Trigger length limit on reminders (max 200 chars)
+- Notes array cap (max 20 per plan step)
+- Shell metacharacter stripping in error distillation
+- Auto-correction confidence lowered from 0.8 to 0.5
+- State file mode validation (only accept known modes)
+- Atomic confidence boost (MIN SQL) prevents race conditions
+
+### Design Philosophy (Cairn-Informed)
+- **Encode conclusions, not experiences** — "X failed because Y, fix Z"
+- **Inject minimum, retrieve on demand** — briefing < 300 tokens
+- **Hooks for critical path, tools for discretionary** — automatic > manual
+- **Decay is a feature** — unretrieved memories should fade
+- **Better encoding beats better retrieval** — store the right things, naive retrieval works
+
+---
+
+> **Note:** v1.x changelog preserved below for historical reference. All v1 code has been removed.
+
+
+## [1.0.33] — 2026-03-07 — Injection Noise Reduction: Quality Over Quantity
+
+### Suppressed Noise Generators (15 outputs removed)
+- **Removed** `[ENGRAM NUDGE]` context pressure warnings — adds anxiety without value
+- **Removed** `[ENGRAM OFFLOAD]` context offload messages — same
+- **Removed** `[Engram] Context: X% | Injection: Y | Phase: Z` status line — same
+- **Removed** `[ENGRAM DISTILL]` memory maintenance prompts — interrupts workflow
+- **Removed** `[ENGRAM GAP]` "No prior knowledge" warnings — obvious and unhelpful
+- **Removed** `[ENGRAM CONFIDENCE: LOW]` warnings — same
+- **Removed** `[ENGRAM SCAFFOLD]` mastery level labels — condescending noise
+- **Removed** `[ENGRAM ANALOGY]` cross-domain analogies — rarely actionable
+- **Removed** `[ENGRAM PATTERN]` schema metadata (name, instance count) — noise
+- **Removed** `[ENGRAM TEACH]` teaching hints — "explanation request detected" is noise
+- **Removed** `[ENGRAM ARCH]` low-risk architecture impact — only inject when risk is high
+- **Removed** `[ENGRAM LEARNING PATH]` auto-generated paths — not actionable during work
+- **Removed** ZPD mastery level injection — noise
+- All internal tracking continues silently — only the output injection is suppressed
+
+### Prompt Relevance Gating (universal principle)
+- **Memory Surface (step 2.5)**: Only surfaces memories with keyword overlap to current prompt; antipatterns bypass (always relevant in-domain)
+- **Contextual Recall (step 3a)**: Non-critical memories require keyword overlap; somatic markers and failure warnings bypass
+- **Proactive Recall (step 3z)**: Proven/decision memories require keyword overlap
+- **Code Context Recall (pre-write)**: Patterns, conventions, and procedural memories require keyword overlap with the code being written — prevents generic memories (e.g., "git workflow") from firing on every edit
+- **Schema Intuitions (step 3b)**: Only strong intuitions with actionable hints AND keyword overlap pass
+- **Insights (3c) + Procedural (3d)**: Now require keyword overlap in HIGH mode
+- New constants: `MEMORY_SURFACE.MIN_PROMPT_RELEVANCE` (0.08), `PROACTIVE_RECALL.MIN_PROMPT_RELEVANCE` (0.06)
+
+### Mental Model Throttling
+- Mental model now only injected on first prompt, domain change, or after 15-turn cooldown — not every prompt
+- New constant: `MEMORY_SURFACE.MODEL_INJECTION_COOLDOWN` (15 turns)
+
+### Pre-Write File-Type Filtering
+- Antipattern warnings now filtered by file extension: Python/ORM antipatterns skip when editing XML/HTML/CSS files, and vice versa
+- Prevents "stock.move warnings during view audits" and "POS camelCase warnings while editing backup code"
+
+### Injection Caps
+- Maximum 3 contextual memories per prompt (was unbounded) — surfaces only the most relevant
+- Maximum 1 decision injection per prompt (was unbounded) — multi-line, expensive
+- Chain injection cooldown increased to 8 turns (was 5) and capped at 1 per prompt
+- Contradictions still surface (they indicate real conflicts to resolve)
+
+### MEMORY.md Mental Model Cleanup
+- Mental model markdown now concise: domain + memory count + confidence + pitfalls only
+- Removed noisy "Patterns" section (schema metadata like "Recurring pattern involving cognitive, engine, fixed, organic")
+- Removed "Trajectory" section ("Evolved from spreading, activation, works to pushed, encoding" is noise)
+- Stripped leaked user prompts from "Understanding" field (Know:/Recent:/Learned:/Track: suffixes)
+- Principles limited to those with evidence > 1 (max 2)
+- Pitfalls limited to 3, truncated to 150 chars
+
+### Watcher Threshold Tuning
+- Gentle nudge increased from 3 to 6 turns (was firing too early)
+- Strong nudge increased from 6 to 12 turns
+- Urgent nudge increased from 10 to 20 turns
+- CLAUDE.md already prompts engram tool usage — watcher doesn't need to nag
+
+### Tests
+- 19 new tests: 4 relevance gating, 4 file-type filtering, 5 noise-vs-signal cases, 3 threshold sanity, 3 watcher thresholds
+- 90 test files, 1909 tests passing
+
+## [1.0.32] — 2026-03-07 — Architectural Recovery: Milestones, Decisions, Specificity
+
+### Completed Milestones (Gap B)
+- New `completed_milestones` field in WatcherState and ContinuationBrief
+- Auto-detects milestones from: git commit messages, npm publish/version output, significant test passes (50+ tests)
+- Post-compact injection shows "Completed:" section before decisions — what was accomplished is first-class context
+
+### Implicit Decision Capture (Gap A)
+- Decisions now include implicit sources: commit messages as "Applied: ..." decisions, user strategy prompts ("let's fix X first") as "Strategy: ..." decisions
+- Explicit decision memories still take priority; implicit ones fill in when explicit < 3
+
+### Specific Next Steps (Gap C)
+- Next steps now follow strict priority order: planned_next_step > user's unfinished instruction > specific error content > hypothesis > discovery > search intent > generic fallback
+- Error-based next steps now include the actual error message, not just "Fix: [truncated blob]"
+- User prompts that look like instructions are carried forward as "Complete: ..." next steps
+
+### Lesson Quality Scoring (Gap D)
+- Lessons in bridge now scored by principle quality: +0.3 for principle language (because/when/always/never/instead), -0.4 for pure code-change descriptions
+- `isPrincipleLevel()` detects lessons expressing generalizable rules
+- `isDescriptiveOnly()` detects lessons that just describe what code was modified
+- Lessons sorted by quality score, ensuring principle-level insights rank above descriptive summaries
+
+### Pre-Compact Lesson Distillation (Gap 5)
+- `distillPreCompactLesson()` replaces the garbage lesson "Working on X. N files modified." with actual content
+- Lesson now includes: milestones accomplished, discoveries made, approach being used, failures encountered, active blockers
+- Falls back to minimal format only when zero data exists — previously always produced filler
+
+### Session Outcome Enrichment (Gap 6)
+- **Approach pivots** now tracked as session outcomes: `Pivoted from "broad regex" to "targeted patterns"`
+- **Discoveries** tracked as session outcomes: `Discovered: containsError strips real error classes`
+- **Resolutions** tracked as session outcomes: `Resolved: Used targeted patterns instead`
+- These feed the continuation brief and pre-compact lesson — reasoning chain reconstructable from outcomes
+
+### Reasoning Trail Enhancement
+- Session handoff reasoning trail now includes milestones as breadcrumbs
+- Transcript mining runs when chain data is sparse (fallback reasoning extraction)
+
+### Tests
+- 20 new tests for milestones, decisions, next steps, lesson quality, pre-compact distillation, outcome enrichment (71 total in continuation-brief.test.ts)
+- 1884 tests across 89 files, all passing
 
 ## [1.0.31] — 2026-03-07 — 31 Gap Fixes: Complete Post-Compact Recovery Pipeline
 

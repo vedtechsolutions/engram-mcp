@@ -1,195 +1,257 @@
-# Engram MCP — Cognitive Memory for AI
+# Engram — Persistent Memory for Claude Code
 
 > *An engram is a unit of cognitive information imprinted in neural tissue — the physical trace of a memory.*
 
-Engram gives Claude Code **persistent, cross-session memory** that learns from experience. It runs locally as an MCP server + hook processor, automatically encoding errors, decisions, and discoveries — then surfacing them when relevant.
+## Why Engram?
 
-## What It Does
+Claude Code forgets everything when the context window compacts. Your decisions, your debugging breakthroughs, your "always use X instead of Y" — gone. You repeat the same mistakes, re-explain the same architecture, re-discover the same solutions.
 
-- **Remembers across sessions** — knowledge encoded in session 5 surfaces automatically in session 20
-- **Learns from mistakes** — errors resolved in past sessions auto-surface their fix when the same error appears
-- **Warns about antipatterns** — known bad patterns trigger warnings before you write code
-- **Survives compaction** — after context window compression, Engram restores your full project understanding
-- **Reduces context bloat** — deliberate offloading protocol keeps the context window lean
-- **Self-maintaining** — automatic consolidation prunes noise, promotes valuable memories, optimizes storage
+**Engram fixes this.** After compaction, Claude continues working like it never happened — with your decisions, pitfalls, and project context intact.
 
-## Quick Install
+## You Don't Need Memory MCP
 
-```bash
-# Install
-npm install -g @vedtechsolutions/engram-mcp
+If you're using [Memory MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) or similar knowledge-graph memory servers, Engram replaces them entirely:
 
-# Configure Claude Code
-npx @vedtechsolutions/engram-mcp setup
+| | Memory MCP | Engram |
+|---|---|---|
+| **Encoding** | Manual — Claude must decide to call `create_entities` | **Automatic** — hooks capture errors, corrections, decisions without tool calls |
+| **Recall** | Manual — Claude must call `search_nodes` | **Automatic** — pitfalls injected before writes, corrections on session start |
+| **After compaction** | Nothing — Claude doesn't know the memory server exists | **Full recovery** — briefing auto-injected with task, files, decisions, pitfalls |
+| **Context cost** | Every tool call burns tokens | **Zero-token hooks** — hooks run outside the context window |
+| **Learning** | Store and retrieve | **Encode, decay, and surface** — confidence scoring, relevance matching, natural forgetting |
+| **Noise** | Grows forever, no curation | **Self-maintaining** — confidence decay, dedup, stale detection |
+| **Error prevention** | None | **Pitfall surfacing** — warns before you repeat known mistakes |
+
+### The Compaction Problem (and Why Hooks Solve It)
+
+When Claude Code's context window fills up, it compacts — summarizing the conversation to free space. This destroys:
+- What you were doing and why
+- Decisions you made and their rationale
+- Errors you hit and how you fixed them
+- Files you were working on
+
+**Tool-based memory servers can't help** because after compaction, Claude doesn't remember the server exists until something reminds it to call a tool. There's no automatic trigger.
+
+**Engram's hooks fire automatically:**
+- `SessionStart` hook injects a briefing with your active plan, recent pitfalls, and project context — Claude picks up exactly where it left off
+- `PreCompact` hook saves a snapshot of what you were doing before compaction happens
+- `UserPromptSubmit` hook surfaces relevant memories on every prompt — no tool call needed
+- `PreToolUse` hook warns about known pitfalls before every Write/Edit/Bash
+
+The result: **compaction becomes invisible.** Claude continues working with full context of your decisions, your mistakes, and your project's pitfalls.
+
+### How Much Context Does Engram Use?
+
+Engram's post-compaction injection is ~180 tokens — just task, domain, files, and critical decisions. Everything else is pulled on-demand per prompt. Compare this to the 2000+ tokens that narrative-style memory systems inject, displacing space you need for actual work.
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Claude Code                        │
+│                                                      │
+│  Hooks (automatic, zero-token):                      │
+│    SessionStart  → inject briefing + pitfalls        │
+│    PreCompact    → save snapshot before compaction    │
+│    PreToolUse    → warn on known pitfalls             │
+│    UserPrompt    → surface relevant memories          │
+│    PostToolFail  → learn from errors automatically    │
+│    PostToolUse   → boost pitfalls you avoided         │
+│    SessionEnd    → close session, promote pitfalls    │
+│                                                      │
+│  MCP Tools (discretionary):                          │
+│    engram_recall    → search memories                 │
+│    engram_learn     → store a lesson                  │
+│    engram_plan      → track multi-step tasks          │
+│    engram_remind    → "when X, remind me Y"           │
+│    + correct, forget, strengthen, weaken              │
+│                                                      │
+│  StatusLine:                                         │
+│    Engram: normal | 42 mem 3 rem                     │
+└────────────────────┬────────────────────────────────┘
+                     │
+              ┌──────┴──────┐
+              │  SQLite DB  │
+              │  + FTS5     │
+              │  ~/.engram/ │
+              └─────────────┘
 ```
 
-That's it. Start a new Claude Code session and Engram activates automatically.
+## Quick Start
 
-## Manual Setup
+### 1. Clone and build
 
-If you prefer manual configuration, add to `~/.claude/settings.json`:
+```bash
+git clone https://github.com/vedtechsolutions/engram-mcp.git
+cd engram-mcp
+pnpm install
+npx tsup
+```
 
-### MCP Server
+### 2. Configure MCP server
+
+Add to your project's `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "engram": {
       "command": "node",
-      "args": ["/path/to/node_modules/engram-mcp/dist/index.js"],
-      "env": {
-        "ENGRAM_DB_PATH": "~/.engram/engram.db",
-        "ENGRAM_LOG_LEVEL": "info",
-        "ENGRAM_AUTO_CONSOLIDATE": "true"
-      }
+      "args": ["/path/to/engram-mcp/dist/server.js"]
     }
   }
 }
 ```
 
-### Hooks
+### 3. Configure hooks
 
-Add these hooks to enable automatic memory encoding:
+Add to your project's `.claude/settings.json`:
 
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": [{
-      "type": "command",
-      "command": "node /path/to/node_modules/engram-mcp/dist/hook.js user-prompt-submit",
-      "input": "stdin"
-    }],
-    "PreToolUse": [{
-      "type": "command",
-      "command": "node /path/to/node_modules/engram-mcp/dist/hook.js pre-tool-use"
-    }],
-    "PostToolUse": [{
-      "type": "command",
-      "command": "node /path/to/node_modules/engram-mcp/dist/hook.js post-tool-use"
-    }],
     "SessionStart": [{
-      "type": "command",
-      "command": "node /path/to/node_modules/engram-mcp/dist/hook.js session-start",
-      "input": "stdin"
+      "hooks": [{ "type": "command", "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/session-start.js" }]
+    }],
+    "PreCompact": [{
+      "hooks": [{ "type": "command", "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/pre-compact.js" }]
     }],
     "SessionEnd": [{
-      "type": "command",
-      "command": "node /path/to/node_modules/engram-mcp/dist/hook.js session-end",
-      "input": "stdin"
+      "hooks": [{ "type": "command", "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/session-end.js" }]
+    }],
+    "PostToolUseFailure": [{
+      "hooks": [{ "type": "command", "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/error-learning.js" }]
+    }],
+    "PreToolUse": [{
+      "matcher": "Write|Edit|Bash",
+      "hooks": [{ "type": "command", "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/pitfall-check.js" }]
+    }],
+    "UserPromptSubmit": [{
+      "hooks": [{ "type": "command", "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/prompt-check.js" }]
+    }],
+    "PostToolUse": [{
+      "matcher": "Write|Edit",
+      "hooks": [{ "type": "command", "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/success-tracker.js", "async": true }]
     }]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "NODE_PATH=/path/to/engram-mcp/node_modules node /path/to/engram-mcp/dist/hooks/statusline.js",
+    "padding": 0
   }
 }
 ```
 
-See the setup script output for the complete hook list.
+### 4. Add LLM instructions
 
-## How It Works
+Create `.claude/rules/engram.md` in your project:
 
-### Automatic Encoding
-
-Engram hooks into Claude Code events and automatically captures:
-
-| Event | What's Captured |
-|---|---|
-| Bash errors | Error fingerprint + context → graduates to antipattern after recurring |
-| Bash success after errors | Error resolution → links to original error via `caused_by` |
-| Approach pivots | Why approach X failed, what replaced it → `contradicts` connection |
-| Subagent completions | Discoveries, conclusions, lessons extracted from agent output |
-| Write operations | File tracking, architecture graph updates |
-| Session end | Session summary, Hebbian learning (co-recalled memories strengthen) |
-
-### Intelligent Recall
-
-On every prompt, Engram injects relevant memories:
-
-- **`[ENGRAM CONTEXT]`** — relevant knowledge and past experiences
-- **`[ENGRAM CAUTION]`** — warnings from past mistakes (cross-session)
-- **`[ENGRAM SURFACE]`** — top domain memories for ambient awareness
-- **`[ENGRAM REMINDER]`** — trigger-based prospective memories
-
-Recall uses dual-path search:
-1. **FTS5 keyword matching** — exact and stemmed keywords
-2. **TF-IDF cosine similarity** — meaning-based matching (512-dim vectors, zero external APIs)
-
-### Cross-Session Error Resolution
-
-```
-Session 1: ParseError in views.xml
-  → Encoded as error memory
-
-Session 3: Fixed by replacing <tree> with <list>
-  → Resolution linked via caused_by connection
-
-Session 8: Same ParseError in different file
-  → [ENGRAM CAUTION] Similar past error resolved: Use <list> not <tree>
+```markdown
+## Engram Memory
+Briefing auto-injected at session start. Act on it immediately.
+- Before non-trivial work: `engram_recall(query)` for relevant pitfalls.
+- User corrects you: `engram_learn(kind:"correction", content: one sentence, project: null)`.
+- Something fails unexpectedly: `engram_learn(kind:"pitfall", content: what+why+fix)`.
+- Design choice: `engram_plan(decide, chose, why)`.
+- Memory wrong: `engram_weaken(id)`. Memory useful: `engram_strengthen(id)`.
+- User says "always do X when Y": `engram_remind(trigger, action)`.
 ```
 
-### Context Management
+That's it. Engram starts learning from your first session.
 
-Engram actively manages context window pressure:
+## Tools (9)
 
-| Context % | Behavior |
+| Tool | Description |
 |---|---|
-| > 55% | Full recall and injection |
-| 35-55% | Reduced injection, essentials prioritized |
-| < 50% | Offload message: "your state is encoded, safe to focus" |
-| < 40% | Summary mode: truncated content + recall pointers |
-| < 20% | Essential antipatterns only |
-
-## Tools
-
-These tools are available in Claude Code after setup:
-
-| Tool | Usage |
-|---|---|
-| `engram_recall` | Search memory: `engram_recall("how to fix ParseError")` |
-| `engram_encode` | Store knowledge: `engram_encode("In Odoo 18, use list not tree", type: "semantic")` |
-| `engram_learn` | Record experience: `engram_learn(action, outcome, lesson)` |
-| `engram_strengthen` | Reinforce useful memory |
-| `engram_weaken` | Correct wrong memory |
-| `engram_immune_check` | Check code against known antipatterns |
-| `engram_stats` | Memory health and statistics |
-| `engram_remind` | Create trigger-based reminder ("when X happens, do Y") |
-| `engram_vaccinate` | Pre-register an antipattern |
-| `engram_cleanup` | Remove noise from database (dry-run by default) |
-| `engram_consolidate` | Trigger memory optimization cycle |
-| `engram_self` | View/update persistent self-model |
-| `engram_set_goal` | Set learning goals |
-| `engram_list_goals` | Track learning progress |
+| `engram_recall` | Search memories by query, filtered by project/kind |
+| `engram_learn` | Store a lesson (pitfall, decision, correction, fact) |
+| `engram_correct` | Update or invalidate a wrong memory |
+| `engram_forget` | Hard-delete a memory |
+| `engram_strengthen` | Boost confidence of a useful memory |
+| `engram_weaken` | Lower confidence of a wrong memory |
+| `engram_plan` | Create/track multi-step plans with decisions |
+| `engram_remind` | Set trigger-action reminders ("when X, do Y") |
 | `engram_list_reminders` | List active reminders |
-| `engram_experience` | Get version-specific knowledge |
 
-## Architecture
+## Hooks (8)
 
+| Hook | Event | What Happens |
+|---|---|---|
+| `session-start` | Session begin | Injects briefing: plan status, pitfalls, interrupted session recovery |
+| `pre-compact` | Before compaction | Saves snapshot: files, commands, user context, approach notes |
+| `session-end` | Session end | Closes session, promotes cross-project pitfalls to global |
+| `error-learning` | Tool failure | Classifies error, encodes as pitfall, boosts on repeat |
+| `pitfall-check` | Before Write/Edit/Bash | Surfaces relevant pitfalls for the file/command |
+| `prompt-check` | User prompt | Detects corrections, surfaces relevant memories and reminders |
+| `success-tracker` | After Write/Edit | Boosts pitfalls you successfully avoided |
+| `statusline` | After response | Shows context mode, memory count, reminder count |
+
+## Context-Adaptive Modes
+
+Engram monitors context window pressure and adjusts automatically:
+
+| Mode | Context Free | Behavior |
+|---|---|---|
+| `normal` | > 50% | Full recall, full plan output |
+| `compact` | 25–50% | 3 results max, current step only |
+| `minimal` | 10–25% | 2 results, no new learning |
+| `critical` | < 10% | Silent — preserves remaining context |
+
+## Memory Types
+
+| Kind | Purpose | Example |
+|---|---|---|
+| `pitfall` | Known mistakes to avoid | "Never use `store=False` computed fields in search domains" |
+| `decision` | Architectural choices | "Chose SQLite over Postgres for single-user local storage" |
+| `correction` | User corrections | "No, always use strict equality in TypeScript" |
+| `fact` | Knowledge and conventions | "In Odoo 19, use `<list>` not `<tree>` in views" |
+
+## Self-Maintaining
+
+Engram maintains itself automatically:
+
+- **Confidence decay**: Memories not recalled in 30 days decay by 10%. Below 0.1 confidence, they're auto-deleted (corrections are exempt)
+- **Deduplication**: New memories with >80% token overlap to existing ones are merged
+- **Stale project detection**: Projects with no recall in 90 days are flagged
+- **Plan archival**: Completed plans older than 6 months are cleaned up
+- **FTS5 integrity**: Automatic index rebuild on corruption detection
+- **Cross-project promotion**: Pitfalls recalled in 3+ sessions are promoted from project-scoped to global
+
+## Security
+
+- All SQL queries use parameterized statements
+- FTS5 input sanitized with allowlist pattern (`[^a-zA-Z0-9\s]` → strip)
+- File extension sanitization prevents LIKE injection
+- Transcript path validation prevents path traversal
+- 1MB stdin cap on all hook inputs
+- State file mode validation
+- Shell metacharacter stripping in error distillation
+- Atomic confidence updates prevent race conditions
+
+## Development
+
+```bash
+pnpm install         # Install dependencies
+npx tsup             # Build (ESM, node20 target)
+npx vitest run       # Run tests (249 tests across 15 files)
 ```
-Layer 6: Primary Memory Protocol    (Offloading, bridge file, cross-session learning)
-Layer 5: Experience Versioning      (Framework knowledge inheritance)
-Layer 4: Consolidation Engine       (9-phase: replay, prune, promote, transfer, dream)
-Layer 3: Cortical Storage           (Semantic, Episodic, Procedural, Immune + TF-IDF)
-Layer 2: Hippocampal Bridge         (Significance detection + encoding)
-Layer 1: Sensory Buffer             (Context window / working memory)
-```
 
-31 cognitive engines. 14 hook handlers. 16 MCP tools. All running locally.
+## Technology Stack
 
-## Data & Privacy
+| Component | Technology |
+|---|---|
+| Runtime | Node.js 20+ / TypeScript (strict mode) |
+| Storage | SQLite (better-sqlite3) + WAL mode |
+| Search | FTS5 (built into SQLite) |
+| Interface | MCP Server (@modelcontextprotocol/sdk) |
+| Validation | Zod schemas |
+| Build | tsup (ESM output) |
+| Testing | Vitest |
 
-- **100% local** — all data stays on your machine in `~/.engram/engram.db`
-- **No external APIs** — embeddings computed locally via TF-IDF (no OpenAI, no cloud)
-- **Your memories are yours** — each installation starts with a fresh database
-- **No telemetry** — zero network calls, zero tracking
+## Status
 
-## Requirements
-
-- Node.js 20+
-- Claude Code CLI
+**v2.0.0** — Ground-up rewrite. 24 source files, 249 tests, 9 tools, 8 hooks.
 
 ## License
 
-Business Source License 1.1 — free for personal and non-commercial use. Converts to Apache 2.0 on 2029-03-05. See [LICENSE](LICENSE) for details.
-
-For commercial licensing: [Contact us](https://github.com/vedtechsolutions/engram-mcp/issues)
-
----
-
-Built by [VedTech Solutions](https://github.com/vedtechsolutions)
+MIT
