@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import {
+  BRIEFING,
   CONFIDENCE,
   MODE_LIMITS,
   getProjectId,
   openHookDb,
   readHookStdin,
   readStateFile
-} from "../chunk-2PJDMCJB.js";
+} from "../chunk-ILV37I4F.js";
 
 // src/v2/hooks/pitfall-check.ts
 import { extname } from "path";
@@ -30,12 +31,12 @@ function checkFilePitfalls(db, project, toolInput, limit) {
   const rawExt = extname(filePath).slice(1);
   const ext = rawExt.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20);
   if (!ext) return { permissionDecision: "allow" };
-  const pitfalls = db.prepare(`
+  const projectPitfalls = db.prepare(`
     SELECT content FROM memories
     WHERE kind = 'pitfall'
       AND invalidated = 0
       AND confidence >= ?
-      AND (project = ? OR project IS NULL)
+      AND project = ?
       AND tags LIKE ?
     ORDER BY confidence DESC
     LIMIT ?
@@ -45,8 +46,30 @@ function checkFilePitfalls(db, project, toolInput, limit) {
     `%"${ext}"%`,
     limit
   );
-  if (pitfalls.length === 0) return { permissionDecision: "allow" };
-  const warnings = pitfalls.map((p) => `- ${p.content}`).join("\n");
+  const remaining = limit - projectPitfalls.length;
+  let globalPitfalls = [];
+  if (remaining > 0) {
+    const domainTags = getProjectDomainTags(db, project);
+    if (domainTags.has(ext)) {
+      globalPitfalls = db.prepare(`
+        SELECT content FROM memories
+        WHERE kind = 'pitfall'
+          AND invalidated = 0
+          AND confidence >= ?
+          AND project IS NULL
+          AND tags LIKE ?
+        ORDER BY confidence DESC
+        LIMIT ?
+      `).all(
+        CONFIDENCE.MIN_FOR_PITFALL_SURFACE,
+        `%"${ext}"%`,
+        remaining
+      );
+    }
+  }
+  const allPitfalls = [...projectPitfalls, ...globalPitfalls];
+  if (allPitfalls.length === 0) return { permissionDecision: "allow" };
+  const warnings = allPitfalls.map((p) => `- ${p.content}`).join("\n");
   return {
     permissionDecision: "allow",
     additionalContext: `[ENGRAM] Pitfalls for .${ext} files:
@@ -59,19 +82,42 @@ function checkCommandPitfalls(db, project, toolInput, limit) {
   const keywords = command.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3 && !isCommonWord(w)).slice(0, 5).map((w) => `"${w}"`).join(" OR ");
   if (!keywords) return { permissionDecision: "allow" };
   try {
-    const pitfalls = db.prepare(`
+    const projectPitfalls = db.prepare(`
       SELECT memories.content FROM memories_fts
       JOIN memories ON memories.rowid = memories_fts.rowid
       WHERE memories_fts MATCH ?
         AND memories.kind = 'pitfall'
         AND memories.invalidated = 0
         AND memories.confidence >= ?
-        AND (memories.project = ? OR memories.project IS NULL)
+        AND memories.project = ?
       ORDER BY bm25(memories_fts)
       LIMIT ?
     `).all(keywords, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project, limit);
-    if (pitfalls.length === 0) return { permissionDecision: "allow" };
-    const warnings = pitfalls.map((p) => `- ${p.content}`).join("\n");
+    const remaining = limit - projectPitfalls.length;
+    let globalPitfalls = [];
+    if (remaining > 0) {
+      const domainTags = getProjectDomainTags(db, project);
+      if (domainTags.size > 0) {
+        const globalRows = db.prepare(`
+          SELECT memories.content, memories.tags FROM memories_fts
+          JOIN memories ON memories.rowid = memories_fts.rowid
+          WHERE memories_fts MATCH ?
+            AND memories.kind = 'pitfall'
+            AND memories.invalidated = 0
+            AND memories.confidence >= ?
+            AND memories.project IS NULL
+          ORDER BY bm25(memories_fts)
+          LIMIT ?
+        `).all(keywords, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, remaining * 3);
+        globalPitfalls = globalRows.filter((r) => {
+          const tags = safeJsonParse(r.tags, []);
+          return tags.some((t) => domainTags.has(t));
+        }).slice(0, remaining);
+      }
+    }
+    const allPitfalls = [...projectPitfalls, ...globalPitfalls];
+    if (allPitfalls.length === 0) return { permissionDecision: "allow" };
+    const warnings = allPitfalls.map((p) => `- ${p.content}`).join("\n");
     return {
       permissionDecision: "allow",
       additionalContext: `[ENGRAM] Warning:
@@ -79,6 +125,32 @@ ${warnings}`
     };
   } catch {
     return { permissionDecision: "allow" };
+  }
+}
+function getProjectDomainTags(db, project) {
+  const rows = db.prepare(`
+    SELECT tags FROM memories
+    WHERE project = ? AND invalidated = 0 AND tags != '[]'
+    LIMIT 50
+  `).all(project);
+  const tagCounts = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const tags = safeJsonParse(row.tags, []);
+    for (const tag of tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  const domain = /* @__PURE__ */ new Set();
+  for (const [tag, count] of tagCounts) {
+    if (count >= BRIEFING.DOMAIN_TAG_MIN_COUNT) domain.add(tag);
+  }
+  return domain;
+}
+function safeJsonParse(json, fallback) {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return fallback;
   }
 }
 var COMMON_WORDS = /* @__PURE__ */ new Set([

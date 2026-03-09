@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import {
   checkReminders
-} from "../chunk-7YDVCCRG.js";
+} from "../chunk-33DKOER3.js";
 import {
+  BRIEFING,
   CONFIDENCE,
   INTENT_PATTERNS,
   MODE_LIMITS,
@@ -10,7 +11,7 @@ import {
   openHookDb,
   readHookStdin,
   readStateFile
-} from "../chunk-2PJDMCJB.js";
+} from "../chunk-ILV37I4F.js";
 
 // src/v2/hooks/prompt-check.ts
 import { v4 as uuid } from "uuid";
@@ -81,20 +82,65 @@ function recallRelevantPitfalls(db, project, prompt, limit) {
   const words = prompt.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3).slice(0, 8).map((w) => `"${w}"`).join(" OR ");
   if (!words) return [];
   try {
-    const rows = db.prepare(`
+    const projectRows = db.prepare(`
       SELECT memories.content FROM memories_fts
       JOIN memories ON memories.rowid = memories_fts.rowid
       WHERE memories_fts MATCH ?
         AND memories.kind = 'pitfall'
         AND memories.invalidated = 0
         AND memories.confidence >= ?
-        AND (memories.project = ? OR memories.project IS NULL)
+        AND memories.project = ?
       ORDER BY bm25(memories_fts)
       LIMIT ?
     `).all(words, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project, limit);
-    return rows.map((r) => r.content);
+    const remaining = limit - projectRows.length;
+    if (remaining <= 0) return projectRows.map((r) => r.content);
+    const domainTags = getProjectDomainTags(db, project);
+    if (domainTags.size === 0) return projectRows.map((r) => r.content);
+    const globalRows = db.prepare(`
+      SELECT memories.content, memories.tags FROM memories_fts
+      JOIN memories ON memories.rowid = memories_fts.rowid
+      WHERE memories_fts MATCH ?
+        AND memories.kind = 'pitfall'
+        AND memories.invalidated = 0
+        AND memories.confidence >= ?
+        AND memories.project IS NULL
+      ORDER BY bm25(memories_fts)
+      LIMIT ?
+    `).all(words, CONFIDENCE.MIN_FOR_PITFALL_SURFACE, remaining * 3);
+    const filteredGlobals = globalRows.filter((r) => {
+      const tags = safeJsonParse(r.tags, []);
+      return tags.some((t) => domainTags.has(t));
+    }).slice(0, remaining).map((r) => r.content);
+    return [...projectRows.map((r) => r.content), ...filteredGlobals];
   } catch {
     return [];
+  }
+}
+function getProjectDomainTags(db, project) {
+  const rows = db.prepare(`
+    SELECT tags FROM memories
+    WHERE project = ? AND invalidated = 0 AND tags != '[]'
+    LIMIT 50
+  `).all(project);
+  const tagCounts = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const tags = safeJsonParse(row.tags, []);
+    for (const tag of tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  const domain = /* @__PURE__ */ new Set();
+  for (const [tag, count] of tagCounts) {
+    if (count >= BRIEFING.DOMAIN_TAG_MIN_COUNT) domain.add(tag);
+  }
+  return domain;
+}
+function safeJsonParse(json, fallback) {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return fallback;
   }
 }
 function findSimilar(db, content) {

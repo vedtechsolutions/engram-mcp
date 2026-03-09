@@ -5,7 +5,7 @@ import {
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-2PJDMCJB.js";
+} from "../chunk-ILV37I4F.js";
 
 // src/v2/hooks/success-tracker.ts
 function run(input, db, lastEdit) {
@@ -37,7 +37,7 @@ function boostRelevantPitfalls(db, project, ext) {
     WHERE kind = 'pitfall'
       AND invalidated = 0
       AND tags LIKE ?
-      AND (project = ? OR project IS NULL)
+      AND project = ?
       AND last_recalled IS NOT NULL
       AND last_recalled > strftime('%Y-%m-%dT%H:%M:%f', 'now', '-1 hour') || 'Z'
     LIMIT 5

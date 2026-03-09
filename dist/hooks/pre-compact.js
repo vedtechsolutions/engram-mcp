@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import {
   parseTranscript
-} from "../chunk-CMESQ3P2.js";
+} from "../chunk-VESSVJCD.js";
 import {
   HOOK,
   getProjectId,
   openHookDb,
   readHookStdin
-} from "../chunk-2PJDMCJB.js";
+} from "../chunk-ILV37I4F.js";
 
 // src/v2/hooks/pre-compact.ts
 import { v4 as uuid } from "uuid";

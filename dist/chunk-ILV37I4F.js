@@ -44,8 +44,10 @@ var BRIEFING = {
   // Hard cap on briefing injection
   MAX_PITFALLS: 5,
   // Max pitfalls in briefing
-  MAX_CORRECTIONS: 3
+  MAX_CORRECTIONS: 3,
   // Max corrections in briefing
+  DOMAIN_TAG_MIN_COUNT: 2
+  // A tag must appear in ≥2 project memories to be a "domain tag"
 };
 var CONTENT = {
   WARN_LENGTH: 200,
@@ -443,4 +445,4 @@ export {
   readHookStdin,
   writeStateFile
 };
-//# sourceMappingURL=chunk-2PJDMCJB.js.map
+//# sourceMappingURL=chunk-ILV37I4F.js.map

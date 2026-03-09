@@ -1,6 +1,6 @@
 {
   "name": "@vedtechsolutions/engram-mcp",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Persistent memory for Claude Code — survives context compaction",
   "type": "module",
   "main": "dist/server.js",

@@ -3,7 +3,7 @@ import {
   BRIEFING,
   CONFIDENCE,
   HOOK
-} from "./chunk-2PJDMCJB.js";
+} from "./chunk-ILV37I4F.js";
 
 // src/v2/hooks/shared/briefing.ts
 function compileBriefing(db, input) {
@@ -137,28 +137,74 @@ function formatSnapshotSection(snapshot) {
   return lines.join("\n");
 }
 function getPitfalls(db, project, max) {
-  const rows = db.prepare(`
+  const projectRows = db.prepare(`
     SELECT * FROM memories
     WHERE kind = 'pitfall' AND invalidated = 0
       AND confidence >= ?
-      AND (project = ? OR project IS NULL)
-    ORDER BY
-      CASE WHEN project = ? THEN 0 ELSE 1 END,
-      confidence DESC
+      AND project = ?
+    ORDER BY confidence DESC
     LIMIT ?
-  `).all(CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project, project, max);
-  return rows.map(rowToMemory);
+  `).all(CONFIDENCE.MIN_FOR_PITFALL_SURFACE, project, max);
+  const remaining = max - projectRows.length;
+  if (remaining <= 0) return projectRows.map(rowToMemory);
+  const domainTags = getProjectDomainTags(db, project);
+  if (domainTags.size === 0) return projectRows.map(rowToMemory);
+  const globalRows = db.prepare(`
+    SELECT * FROM memories
+    WHERE kind = 'pitfall' AND invalidated = 0
+      AND confidence >= ?
+      AND project IS NULL
+    ORDER BY confidence DESC
+    LIMIT ?
+  `).all(CONFIDENCE.MIN_FOR_PITFALL_SURFACE, remaining * 3);
+  const filteredGlobals = globalRows.filter((row) => hasTagOverlap(safeJsonParse(row.tags, []), domainTags)).slice(0, remaining);
+  return [...projectRows.map(rowToMemory), ...filteredGlobals.map(rowToMemory)];
 }
 function getCorrections(db, project, max) {
-  const rows = db.prepare(`
+  const projectRows = db.prepare(`
     SELECT * FROM memories
     WHERE kind = 'correction' AND invalidated = 0
       AND confidence >= ?
-      AND (project = ? OR project IS NULL)
+      AND project = ?
     ORDER BY confidence DESC
     LIMIT ?
   `).all(CONFIDENCE.MIN_FOR_BRIEFING, project, max);
-  return rows.map(rowToMemory);
+  const remaining = max - projectRows.length;
+  if (remaining <= 0) return projectRows.map(rowToMemory);
+  const domainTags = getProjectDomainTags(db, project);
+  if (domainTags.size === 0) return projectRows.map(rowToMemory);
+  const globalRows = db.prepare(`
+    SELECT * FROM memories
+    WHERE kind = 'correction' AND invalidated = 0
+      AND confidence >= ?
+      AND project IS NULL
+    ORDER BY confidence DESC
+    LIMIT ?
+  `).all(CONFIDENCE.MIN_FOR_BRIEFING, remaining * 3);
+  const filteredGlobals = globalRows.filter((row) => hasTagOverlap(safeJsonParse(row.tags, []), domainTags)).slice(0, remaining);
+  return [...projectRows.map(rowToMemory), ...filteredGlobals.map(rowToMemory)];
+}
+function getProjectDomainTags(db, project) {
+  const rows = db.prepare(`
+    SELECT tags FROM memories
+    WHERE project = ? AND invalidated = 0 AND tags != '[]'
+    LIMIT 50
+  `).all(project);
+  const tagCounts = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const tags = safeJsonParse(row.tags, []);
+    for (const tag of tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  const domain = /* @__PURE__ */ new Set();
+  for (const [tag, count] of tagCounts) {
+    if (count >= BRIEFING.DOMAIN_TAG_MIN_COUNT) domain.add(tag);
+  }
+  return domain;
+}
+function hasTagOverlap(tags, domainTags) {
+  return tags.some((t) => domainTags.has(t));
 }
 function formatPitfalls(pitfalls) {
   const lines = pitfalls.map((p) => `[PITFALL] ${p.content}`);
@@ -324,4 +370,4 @@ export {
   compileBriefing,
   parseTranscript
 };
-//# sourceMappingURL=chunk-CMESQ3P2.js.map
+//# sourceMappingURL=chunk-VESSVJCD.js.map
